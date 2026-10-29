@@ -26,6 +26,7 @@ docs/                      ← published by GitHub Pages
     nurse-code-part-2.html
 engine/                    reusable six-stage consultation engine (no case content)
 planning/                  design manual and build brief (not published to the site)
+.githooks/pre-commit       runs npm run check before each commit
 tools/
   build-activity.mjs       builds private activity pages from a private case file
   encrypt-activity.sh      encrypts one original into docs/activities/
@@ -54,7 +55,10 @@ package.json               pins StatiCrypt 3.5.4
 1. Merge the setup branch into `main`.
 2. Go to **Settings → Pages**. Under **Build and deployment**, choose **Deploy from a branch**, then **main** and **/docs**, and save.
 3. Wait for the deployment to finish (up to about 10 minutes). Check progress under the **Actions** tab. Your course link will be `https://arutt99.github.io/bioethics/`.
-4. Only you should have write access. Check **Settings → Collaborators**.
+4. On the same Pages screen, tick **Enforce HTTPS** once it becomes available.
+5. Only you should have write access. Check **Settings → Collaborators**.
+6. Turn on two-factor authentication for your GitHub account (**your profile picture → Settings → Password and authentication**). Anyone who gets into your account could change what students see on this site, so this is the most important protection.
+7. Under **Settings → Code security**, turn on **Secret scanning** and **Push protection**, and **Dependabot alerts**.
 
 ### On your computer
 
@@ -64,11 +68,13 @@ You need [Node.js](https://nodejs.org/) (version 18 or newer) and Git. Clone the
 npm ci
 ```
 
+This also turns on a pre-commit check (`.githooks/pre-commit`) that runs `npm run check` before each commit, so an unencrypted original is stopped before it reaches the public history. Don't bypass it with `--no-verify`.
+
 ## Add an activity
 
 1. Finish and test the original HTML in your private folder. Name it with lowercase letters, numbers, and hyphens, such as `consultation-01.html`. That name becomes its web address.
-2. Choose a long passphrase as its code (four or more words is better than a short number). Write it down privately.
-3. Encrypt it. The tool asks for the code, so the code never appears in a script or your shell history:
+2. Choose a passphrase of at least 16 characters as its code, such as four or more unrelated words. Don't reuse a code, and don't base it on the activity's name or the course. Anyone can download the encrypted page and try guesses on their own computer as fast as it allows, so length is what keeps the activity closed. Write it down privately.
+3. Encrypt it. The tool asks for the code twice and refuses codes shorter than 16 characters. The code never appears in a script or your shell history:
 
    ```bash
    tools/encrypt-activity.sh ~/ETHOS-private/originals/consultation-01.html "Bioethics Consultation"
@@ -165,10 +171,22 @@ This is practical control over *when* a class can open an activity. It is not id
 - The code-entry screen asks for the code again after every reload. It doesn't remember codes.
 - Nothing is collected centrally. Student work leaves the browser only through the activity's own report download, if it has one.
 
+### Security settings built into the site
+
+- **Content Security Policy.** Every page carries a policy in a `<meta>` tag, because GitHub Pages can't send security headers. The homepage may load only this site's own files. Activity pages may run only their own inline code, and the policy stays in force after the code is entered, so an activity can't fetch anything or send student answers anywhere. As a result, activities must be self-contained: images must be embedded (`data:` URLs) or placed next to the page, and nothing can load from other websites. `npm run check` fails if a page loses its policy.
+- **No "remember me".** Codes aren't stored in the browser. `npm run check` fails if an activity was encrypted with remembering turned on.
+- **No referrer.** Pages tell the browser not to pass their address to other sites.
+- **Pre-publish checks** run on your computer before each commit and on GitHub on every push. They fail if a page in `docs/activities/` isn't encrypted, if any page other than the homepage is published, or if an unencrypted activity original is found anywhere in the repository.
+- **Pinned tools.** StatiCrypt is pinned to an exact version, and the GitHub Actions in the check workflow are pinned to exact commits. Dependabot proposes updates to the actions as pull requests for you to review.
+
+### Opening student reports
+
+A downloaded report is an ordinary HTML file, and a student can edit it before submitting. Treat submitted `.html` files like any web page from an unknown source: open them in a web browser, and don't trust links inside them. If you'd rather avoid this, ask students to submit the **Print or save as PDF** version instead.
+
 ## Tool versions
 
 - StatiCrypt **3.5.4**, pinned in `package.json` and `package-lock.json`. See the [StatiCrypt documentation](https://github.com/robinmoisson/staticrypt). If you upgrade it, re-check `tools/password_template.html` against the new version's default template.
 
 ## Automated check
 
-`.github/workflows/check.yml` runs `npm run check` on every push and pull request. It fails if `activities.json` is broken, a listed activity file is missing, or any page in `docs/activities/` is not encrypted.
+`.github/workflows/check.yml` runs `npm run check` on every push and pull request. It fails if `activities.json` is broken, a listed activity file is missing, any page in `docs/activities/` is not encrypted with the site's security settings, any other page is published, or an unencrypted original is in the repository. The same check runs before each commit on your computer. That matters more, because by the time GitHub runs it, the commit is already public.

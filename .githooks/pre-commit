@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Runs the site check before every commit, because anything pushed stays in the public history.
+# Enabled by 'npm ci' (or: git config core.hooksPath .githooks).
+exec node "$(git rev-parse --show-toplevel)/tools/check.mjs"
