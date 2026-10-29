@@ -31,3 +31,35 @@ Date: 2026-10-29. StatiCrypt 3.5.4. Chromium (Playwright), served locally under 
 - Check on a real phone and with a screen reader
 
 The site has **not** been published yet.
+
+# Verification record: first consultation case (draft 0.1)
+
+Date: 2026-10-29. Case *The Nurse Who Thought the Code Was Wrong*, version 0.1-draft, built with `tools/build-activity.mjs` and encrypted with StatiCrypt 3.5.4. Chromium (Playwright).
+
+## Checked locally
+
+| Check | Result |
+| --- | --- |
+| Opening screen shows Start Consultation first | Pass |
+| Full six-stage route across Part 1 and Part 2 | Pass |
+| Missing required answers: error summary lists each, focus moves to it, entered text is kept | Pass |
+| Each interview must be opened before Stage 2 can be finished | Pass |
+| Conditional field (“Another recommendation”) appears and becomes required only when chosen | Pass |
+| Back navigation through the progress column keeps answers | Pass |
+| Part 1 answers carry into Part 2 in the same browser (also checked through the encrypted pages) | Pass |
+| Part 2 in a fresh browser asks students to restate the provisional recommendation; report notes the restatement | Pass |
+| Part 1 file contains no Part 2 content (build leak check, plus text search) | Pass |
+| Instructor notes removed from built files | Pass |
+| Report download (.html), with apostrophes, quotation marks, angle brackets, line breaks, and non-ASCII text | Pass |
+| Initial, provisional, post-evidence, and final recommendations shown separately in the report | Pass |
+| No horizontal scrolling at 360 px wide | Pass |
+| Encrypted pages: wrong code fails, right code opens, Back to all activities returns to the course page under `/bioethics/` | Pass |
+| Print view shows only the report | Pass |
+| `npm run check` | Pass |
+
+## Not yet checked
+
+- Printing on paper
+- Screen reader pass, real phones, Safari and Firefox
+- Live GitHub Pages deployment
+- Classroom timing

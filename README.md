@@ -22,8 +22,12 @@ docs/                      ← published by GitHub Pages
     activities.json        the activity list you edit
   activities/
     demo-activity.html     ENCRYPTED files only
+    nurse-code-part-1.html
+    nurse-code-part-2.html
+engine/                    reusable six-stage consultation engine (no case content)
 planning/                  design manual and build brief (not published to the site)
 tools/
+  build-activity.mjs       builds private activity pages from a private case file
   encrypt-activity.sh      encrypts one original into docs/activities/
   password_template.html   the styled code-entry screen
   check.mjs                pre-publish check (npm run check)
@@ -89,6 +93,22 @@ npm ci
 
 **Supporting files.** Encryption covers only the HTML file. Images, scripts, or PDFs the activity links to stay publicly readable. Prefer self-contained activities. If you must publish a supporting file, make sure it contains nothing you want protected. `npm run check` lists any you publish.
 
+## Build a consultation case with the engine
+
+New consultation cases can be written as a private case file and built with the engine in `engine/`. See [`engine/README.md`](engine/README.md) for the format.
+
+```bash
+node tools/build-activity.mjs ~/ETHOS-private/cases/nurse-code.mjs ~/ETHOS-private/originals
+```
+
+This writes one original per part into your private folder. Open them in a browser to review, then encrypt each with `tools/encrypt-activity.sh` as above.
+
+### Cases released in parts
+
+A case split into parts (for example, so the evidence reveal opens when you choose) produces one file per part. Give each part its own unrelated passphrase. List each part in `activities.json`. Announce the Part 2 code when you want the reveal to open.
+
+Answers carry from Part 1 to Part 2 only in the same browser on the same device. Otherwise, students restate their provisional recommendation from their downloaded Part 1 record. Ask students to submit both the Part 1 record and the final report.
+
 ## Edit the activity list
 
 Each entry in `docs/data/activities.json` looks like this:
@@ -128,7 +148,7 @@ Each entry in `docs/data/activities.json` looks like this:
 
 Never put a code, or anything that hints at one, in this file.
 
-The current list contains a working demonstration activity and two entries marked `[Placeholder]`. Replace or remove the placeholders when you add real activities. Change the demo's `status` to `hidden` (or delete its entry and file) once you no longer need it.
+The current list contains the two parts of *The Nurse Who Thought the Code Was Wrong* (draft 0.1, not yet approved), a working demonstration activity and two entries marked `[Placeholder]`. Replace or remove the placeholders when you add real activities. Change the demo's `status` to `hidden` (or delete its entry and file) once you no longer need it.
 
 ## Replace an activity or change its code
 

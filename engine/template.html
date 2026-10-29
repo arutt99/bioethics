@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{{PAGE_TITLE}}</title>
+<style>
+{{CSS}}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to the consultation</a>
+<header class="case-header">
+  <div class="inner">
+    <div>
+      <p class="eyebrow">{{EYEBROW}}</p>
+      <h1 class="case-title">{{CASE_TITLE}}</h1>
+    </div>
+    <a href="../">Back to all activities</a>
+  </div>
+</header>
+<div class="layout">
+  <nav class="progress" id="progress" aria-label="Consultation stages"></nav>
+  <main class="panel" id="main" tabindex="-1"></main>
+</div>
+<footer class="site-footer">
+  <p>Answers stay in this browser unless you download your report. Using a shared computer? <button type="button" class="link-button" id="clear-saved">Clear my saved answers</button></p>
+</footer>
+<div class="visually-hidden" id="live" aria-live="polite"></div>
+<script id="ethos-case" type="application/json">{{CASE_JSON}}</script>
+<script>
+{{ENGINE}}
+</script>
+</body>
+</html>
