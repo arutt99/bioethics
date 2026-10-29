@@ -3,6 +3,28 @@
   "courseDescription": "Interactive cases for ethical inquiry and discussion.",
   "activities": [
     {
+      "id": "nurse-code-part-1",
+      "title": "The Nurse Who Thought the Code Was Wrong: Part 1",
+      "topic": "Professional codes and conscience",
+      "week": null,
+      "description": "A nurse objects, on religious grounds, to stopping a resident's tube feedings. Read the consultation request, interview the people involved, and record a provisional recommendation.",
+      "durationMinutes": null,
+      "status": "available",
+      "order": 1,
+      "path": "activities/nurse-code-part-1.html"
+    },
+    {
+      "id": "nurse-code-part-2",
+      "title": "The Nurse Who Thought the Code Was Wrong: Part 2",
+      "topic": "Professional codes and conscience",
+      "week": null,
+      "description": "Opens with a separate code after Part 1. Examine new evidence, analyze the case, make a final recommendation, and download your consultation report.",
+      "durationMinutes": null,
+      "status": "available",
+      "order": 2,
+      "path": "activities/nurse-code-part-2.html"
+    },
+    {
       "id": "demo-activity",
       "title": "Demonstration Activity (not a course case)",
       "topic": "Site demonstration",
@@ -10,7 +32,7 @@
       "description": "A short demonstration used to test the code prompt, a written response, and a report download. It contains no course content.",
       "durationMinutes": 5,
       "status": "available",
-      "order": 1,
+      "order": 3,
       "path": "activities/demo-activity.html"
     },
     {
@@ -21,7 +43,7 @@
       "description": "[Placeholder] Replace this entry with the details of a real forthcoming activity.",
       "durationMinutes": null,
       "status": "coming-soon",
-      "order": 2,
+      "order": 4,
       "path": null
     },
     {
@@ -32,7 +54,7 @@
       "description": "[Placeholder] Hidden entries do not appear on the homepage.",
       "durationMinutes": null,
       "status": "hidden",
-      "order": 3,
+      "order": 5,
       "path": null
     }
   ]
