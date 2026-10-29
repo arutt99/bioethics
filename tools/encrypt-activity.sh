@@ -4,7 +4,7 @@
 # Usage:
 #   tools/encrypt-activity.sh /path/to/private/originals/activity-id.html "Activity title"
 #
-# StatiCrypt prompts for the access code, so it never appears in this script or in
+# The script prompts for the access code twice, so it never appears in this script or in
 # your shell history. The original file must live OUTSIDE this repository.
 set -euo pipefail
 
@@ -44,11 +44,29 @@ if [[ ! -x "$repo_root/node_modules/.bin/staticrypt" ]]; then
 fi
 
 if [[ -n "${STATICRYPT_PASSWORD:-}" ]]; then
-  echo "Unset STATICRYPT_PASSWORD and let StatiCrypt prompt for the code instead." >&2
+  echo "Unset STATICRYPT_PASSWORD and let this script prompt for the code instead." >&2
   exit 1
 fi
 
-"$repo_root/node_modules/.bin/staticrypt" "$original_abs" \
+# Anyone can download the encrypted page and try codes offline, so short codes can be guessed.
+min_length=16
+echo "Choose a code of at least $min_length characters. Four or more unrelated words works well."
+read -rsp "Access code: " code
+echo
+read -rsp "Type it again: " code_again
+echo
+if [[ "$code" != "$code_again" ]]; then
+  echo "The two entries did not match. Nothing was encrypted." >&2
+  exit 1
+fi
+if (( ${#code} < min_length )); then
+  echo "That code is ${#code} characters. Use at least $min_length. Nothing was encrypted." >&2
+  exit 1
+fi
+unset code_again
+
+# The code is passed only to StatiCrypt's environment: never on the command line, in history, or on disk.
+STATICRYPT_PASSWORD="$code" "$repo_root/node_modules/.bin/staticrypt" "$original_abs" \
   --directory "$repo_root/docs/activities" \
   --config false \
   --remember false \

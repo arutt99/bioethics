@@ -3,6 +3,7 @@
   "private": true,
   "description": "Local tooling for the ETHOS course website. The website itself needs no build step.",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
     "check": "node tools/check.mjs",
     "serve": "python3 -m http.server 8000 --directory docs"
   },

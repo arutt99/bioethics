@@ -63,3 +63,23 @@ Date: 2026-10-29. Case *The Nurse Who Thought the Code Was Wrong*, version 0.1-d
 - Screen reader pass, real phones, Safari and Firefox
 - Live GitHub Pages deployment
 - Classroom timing
+
+# Verification record: security hardening
+
+Date: 2026-10-29. StatiCrypt 3.5.4. Chromium (Playwright), served locally under `/bioethics/`. A throwaway test case and code were used; they were kept outside the repository and never committed.
+
+| Check | Result |
+| --- | --- |
+| Homepage loads and lists activities under its Content Security Policy, with no policy errors | Pass |
+| Code prompt, wrong-code message, and Back link work on all three published activities with the policy added | Pass |
+| Engine-built test activity, encrypted with the new template: right code opens it, the six-stage flow runs, the report downloads, and inserted text is escaped | Pass |
+| After decryption, the policy is still in force: a network request from the activity page is blocked | Pass |
+| Adding the policy to the published activities changed only the unencrypted wrapper; the encrypted content is byte-for-byte unchanged | Pass |
+| `tools/encrypt-activity.sh` refuses mismatched entries and codes under 16 characters; the code doesn't appear in the output file | Pass |
+| `npm run check` fails on: an engine-built original anywhere in the repository, an extra page in `docs/`, the homepage without its policy, an activity without its policy, and an activity with "remember me" turned on | Pass |
+| Pre-commit hook blocks a commit containing an unencrypted original | Pass |
+
+## Not yet checked
+
+- Right-code decryption of the three published activities under the policy (their codes aren't in this environment). Test each one once after deploying.
+- Whether the policy stays in force after decryption in Firefox and Safari. If it doesn't, nothing breaks, but those browsers lose that extra layer.

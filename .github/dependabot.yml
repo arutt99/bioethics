@@ -1,0 +1,8 @@
+# Proposes updates to the pinned workflow actions as pull requests. Review before merging.
+# StatiCrypt (npm) is left out on purpose: upgrade it by hand and re-check tools/password_template.html.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

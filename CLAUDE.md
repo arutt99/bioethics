@@ -10,6 +10,8 @@ Static GitHub Pages site (published from `main` → `/docs`) that lists ETHOS bi
 - Keep the homepage buildless: plain HTML, CSS, and JavaScript. No framework.
 - Use relative links only; the site is served under `/bioethics/`.
 - Insert settings text with `textContent`, never `innerHTML`.
+- Keep the Content-Security-Policy `<meta>` tags in `docs/index.html`, `tools/password_template.html`, and `engine/template.html`. Don't loosen them (no external hosts, no `connect-src`) without the instructor's say-so.
+- Encrypted pages must keep `isRememberEnabled: false`. Codes must be at least 16 characters (enforced by `tools/encrypt-activity.sh`).
 - Out of scope for v1: accounts, dashboards, analytics, grading, central submissions, paid services.
 
 ## Commands
