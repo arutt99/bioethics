@@ -1,0 +1,39 @@
+{
+  "courseTitle": "ETHOS Bioethics Activities",
+  "courseDescription": "Interactive cases for ethical inquiry and discussion.",
+  "activities": [
+    {
+      "id": "demo-activity",
+      "title": "Demonstration Activity (not a course case)",
+      "topic": "Site demonstration",
+      "week": null,
+      "description": "A short demonstration used to test the code prompt, a written response, and a report download. It contains no course content.",
+      "durationMinutes": 5,
+      "status": "available",
+      "order": 1,
+      "path": "activities/demo-activity.html"
+    },
+    {
+      "id": "placeholder-coming-soon",
+      "title": "[Placeholder] Upcoming activity",
+      "topic": "[Placeholder topic]",
+      "week": null,
+      "description": "[Placeholder] Replace this entry with the details of a real forthcoming activity.",
+      "durationMinutes": null,
+      "status": "coming-soon",
+      "order": 2,
+      "path": null
+    },
+    {
+      "id": "placeholder-hidden",
+      "title": "[Placeholder] Hidden activity",
+      "topic": "[Placeholder topic]",
+      "week": null,
+      "description": "[Placeholder] Hidden entries do not appear on the homepage.",
+      "durationMinutes": null,
+      "status": "hidden",
+      "order": 3,
+      "path": null
+    }
+  ]
+}

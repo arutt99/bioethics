@@ -1,0 +1,13 @@
+# Safeguard only: .gitignore does not remove files that were already committed.
+# Keep originals and codes in a private folder OUTSIDE this repository.
+node_modules/
+originals/
+protected-output/
+decrypted/
+encrypted/
+.staticrypt.json
+*.original.html
+*codes*.txt
+*passphrase*
+.env
+.DS_Store
