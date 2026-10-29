@@ -1,0 +1,221 @@
+/* ETHOS course library. Palette follows the design manual's reference tokens. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --text: #17212b;
+  --text-muted: #4b5563;
+  --navy: #174d68;
+  --navy-dark: #10384c;
+  --teal: #0f6e6e;
+  --border: #d1d8e0;
+  --success: #226546;
+  --attention: #7a4b00;
+  --error: #a3261b;
+  --focus: #0f6e6e;
+  --radius: 8px;
+  --font: system-ui, "Segoe UI", Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+
+.wrap {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+a {
+  color: var(--navy);
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -48px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  z-index: 10;
+}
+.skip-link:focus {
+  top: 8px;
+}
+
+.site-header {
+  background: var(--navy);
+  color: #ffffff;
+  padding: 40px 0 32px;
+}
+.site-header h1 {
+  margin: 0 0 8px;
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  line-height: 1.2;
+}
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #cfe7e7;
+}
+.lede {
+  margin: 0;
+  max-width: 40rem;
+  color: #e6eef2;
+}
+
+main.wrap {
+  padding-top: 32px;
+  padding-bottom: 48px;
+}
+
+.instructions {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--teal);
+  border-radius: var(--radius);
+  padding: 16px 24px;
+  margin-bottom: 32px;
+  max-width: 48rem;
+}
+.instructions h2 {
+  margin: 8px 0;
+  font-size: 1.25rem;
+}
+.instructions ol {
+  margin: 8px 0;
+  padding-left: 1.25em;
+}
+.note {
+  color: var(--text-muted);
+  margin: 8px 0;
+}
+
+.group {
+  margin-bottom: 32px;
+}
+.group h2 {
+  font-size: 1.25rem;
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  height: 100%;
+}
+.card h3 {
+  margin: 0 0 8px;
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+.card-meta {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+.card-desc {
+  margin: 0 0 16px;
+  flex-grow: 1;
+}
+.card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.badge-available {
+  color: var(--success);
+}
+.badge-soon {
+  color: var(--attention);
+}
+
+.button {
+  display: inline-block;
+  background: var(--navy);
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  min-height: 44px;
+}
+.button:hover {
+  background: var(--navy-dark);
+}
+
+.message {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--attention);
+  border-radius: var(--radius);
+  padding: 16px 24px;
+  max-width: 48rem;
+}
+.message-error {
+  border-left-color: var(--error);
+}
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  padding: 16px 0;
+}
+
+@media (max-width: 40rem) {
+  .site-header {
+    padding: 32px 0 24px;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .card,
+  .instructions {
+    padding: 16px;
+  }
+}

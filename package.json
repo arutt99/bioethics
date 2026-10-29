@@ -1,0 +1,12 @@
+{
+  "name": "ethos-bioethics-activities",
+  "private": true,
+  "description": "Local tooling for the ETHOS course website. The website itself needs no build step.",
+  "scripts": {
+    "check": "node tools/check.mjs",
+    "serve": "python3 -m http.server 8000 --directory docs"
+  },
+  "devDependencies": {
+    "staticrypt": "3.5.4"
+  }
+}

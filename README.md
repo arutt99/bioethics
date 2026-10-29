@@ -1,0 +1,154 @@
+# ETHOS Bioethics Activities
+
+A static course website for interactive ETHOS bioethics activities, hosted free on GitHub Pages.
+
+- Students browse the activity list without an account.
+- Each activity is an encrypted HTML page. Students need that activity's access code to open it.
+- You (the instructor) control what's listed by editing one file: `docs/data/activities.json`.
+
+The full requirements are in [`planning/ETHOS_GitHub_Pages_Build_Brief.md`](planning/ETHOS_GitHub_Pages_Build_Brief.md). The case-design guide is [`planning/ETHOS_Bioethics_Simulator_Design_and_Iteration_Manual.docx`](planning/ETHOS_Bioethics_Simulator_Design_and_Iteration_Manual.docx).
+
+## Repository layout
+
+```text
+docs/                      ← published by GitHub Pages
+  index.html               homepage
+  .nojekyll                serve files as-is
+  assets/
+    styles.css
+    validate.js            settings rules (used by the homepage and the local check)
+    app.js                 builds the activity list
+  data/
+    activities.json        the activity list you edit
+  activities/
+    demo-activity.html     ENCRYPTED files only
+planning/                  design manual and build brief (not published to the site)
+tools/
+  encrypt-activity.sh      encrypts one original into docs/activities/
+  password_template.html   the styled code-entry screen
+  check.mjs                pre-publish check (npm run check)
+package.json               pins StatiCrypt 3.5.4
+```
+
+## The one rule
+
+**Original activity files and access codes never go in this repository**, not even briefly. Anything committed stays in the public history even after you delete it. Keep them in a private folder elsewhere on your computer, for example:
+
+```text
+~/ETHOS-private/          ← never inside this repository
+  originals/
+    consultation-01.html
+  codes.txt               ← or a password manager
+```
+
+`.gitignore` blocks some common names as a backup, but it can't protect a file that's already committed.
+
+## One-time setup
+
+### On GitHub
+
+1. Merge the setup branch into `main`.
+2. Go to **Settings → Pages**. Under **Build and deployment**, choose **Deploy from a branch**, then **main** and **/docs**, and save.
+3. Wait for the deployment to finish (up to about 10 minutes). Check progress under the **Actions** tab. Your course link will be `https://arutt99.github.io/bioethics/`.
+4. Only you should have write access. Check **Settings → Collaborators**.
+
+### On your computer
+
+You need [Node.js](https://nodejs.org/) (version 18 or newer) and Git. Clone the repository, then install the pinned encryption tool:
+
+```bash
+npm ci
+```
+
+## Add an activity
+
+1. Finish and test the original HTML in your private folder. Name it with lowercase letters, numbers, and hyphens, such as `consultation-01.html`. That name becomes its web address.
+2. Choose a long passphrase as its code (four or more words is better than a short number). Write it down privately.
+3. Encrypt it. The tool asks for the code, so the code never appears in a script or your shell history:
+
+   ```bash
+   tools/encrypt-activity.sh ~/ETHOS-private/originals/consultation-01.html "Bioethics Consultation"
+   ```
+
+   The encrypted copy is saved to `docs/activities/consultation-01.html`. The script refuses to run if the original is inside this repository.
+4. Add an entry to `docs/data/activities.json` (see below).
+5. Run the check, then preview the site locally:
+
+   ```bash
+   npm run check
+   ```
+
+   ```bash
+   npm run serve
+   ```
+
+   Open <http://localhost:8000/>, open the activity, and test both a wrong code and the right one.
+6. Commit and push to `main`. Wait for the Pages deployment to finish.
+7. Open the live activity, confirm the code prompt appears, and test the code.
+8. Give students the code when you're ready.
+
+**Supporting files.** Encryption covers only the HTML file. Images, scripts, or PDFs the activity links to stay publicly readable. Prefer self-contained activities. If you must publish a supporting file, make sure it contains nothing you want protected. `npm run check` lists any you publish.
+
+## Edit the activity list
+
+Each entry in `docs/data/activities.json` looks like this:
+
+```json
+{
+  "id": "consultation-01",
+  "title": "Bioethics Consultation",
+  "topic": "Ethical Reasoning",
+  "week": 1,
+  "description": "Work through a consultation and explain your recommendation.",
+  "durationMinutes": 45,
+  "status": "available",
+  "order": 1,
+  "path": "activities/consultation-01.html"
+}
+```
+
+| Field | Rules |
+| --- | --- |
+| `id` | Unique; lowercase letters, numbers, hyphens. |
+| `title` | Required. |
+| `topic`, `description` | Text, or `null`. |
+| `week` | Whole number or `null`. Activities are grouped by week when set, otherwise by topic. |
+| `durationMinutes` | Whole number or `null` (hidden when `null`). Don't guess: leave `null` until you know. |
+| `order` | Number; lower appears first. |
+| `path` | `activities/<name>.html`, or `null` if nothing is published yet. |
+| `status` | See below. |
+
+| `status` | On the homepage | What it means |
+| --- | --- | --- |
+| `available` | Card with **Open activity** and **Access code required** | The code prompt is reachable. Students still need the code. |
+| `coming-soon` | Card with **Coming soon**, no link | Display only. |
+| `hidden` | Not shown | Display only. |
+
+`coming-soon` and `hidden` only change the homepage. A file in `docs/activities/` can still be opened by anyone who knows its address, which is why every published activity must be encrypted.
+
+Never put a code, or anything that hints at one, in this file.
+
+The current list contains a working demonstration activity and two entries marked `[Placeholder]`. Replace or remove the placeholders when you add real activities. Change the demo's `status` to `hidden` (or delete its entry and file) once you no longer need it.
+
+## Replace an activity or change its code
+
+Edit the private original, run `tools/encrypt-activity.sh` again with the same filename (so links keep working), check, commit, and push. Test the live page.
+
+Changing a code does **not** revoke access. Anyone who unlocked the old version may have saved it, and older encrypted versions remain in the public Git history.
+
+## What this protects, and what it doesn't
+
+This is practical control over *when* a class can open an activity. It is not identity verification or exam security.
+
+- Students can share codes with each other.
+- Once unlocked, an activity can be saved by the student.
+- The code-entry screen asks for the code again after every reload. It doesn't remember codes.
+- Nothing is collected centrally. Student work leaves the browser only through the activity's own report download, if it has one.
+
+## Tool versions
+
+- StatiCrypt **3.5.4**, pinned in `package.json` and `package-lock.json`. See the [StatiCrypt documentation](https://github.com/robinmoisson/staticrypt). If you upgrade it, re-check `tools/password_template.html` against the new version's default template.
+
+## Automated check
+
+`.github/workflows/check.yml` runs `npm run check` on every push and pull request. It fails if `activities.json` is broken, a listed activity file is missing, or any page in `docs/activities/` is not encrypted.
