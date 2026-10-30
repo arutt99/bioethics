@@ -1274,6 +1274,7 @@
           .concat(listItems(sec.lists || []))),
       };
     });
+    sections = sections.concat(otherSections(config));
     // Case-file notes are optional, so only the ones written appear.
     var notes = ITEM_ORDER.filter(function (id) {
       return PROMPTS["notes." + id] && value("notes." + id).trim();
@@ -1292,6 +1293,47 @@
       missingCount: allMissing().length,
       sections: sections,
     };
+  }
+
+  // Answers this file holds that the report outline doesn't list, so a report or an
+  // export never leaves out work a student has done.
+  function otherSections(config) {
+    var seen = {};
+    config.sections.forEach(function (sec) {
+      (sec.ids || []).forEach(function (id) {
+        seen[id] = true;
+      });
+      (sec.lists || []).forEach(function (bid) {
+        seen["list:" + bid] = true;
+      });
+    });
+    function inList(id) {
+      return Object.keys(OPTION_BLOCKS).some(function (bid) {
+        return id.indexOf(bid + ".") === 0;
+      });
+    }
+    var out = [];
+    SECTIONS.forEach(function (s) {
+      var items = [];
+      s.blocks.forEach(function (b) {
+        var bid = b.type === "options" ? b.id : b.type === "optionFields" ? b.list : null;
+        if (!bid || seen["list:" + bid]) return;
+        seen["list:" + bid] = true;
+        items = items.concat(
+          listItems([bid]).filter(function (item) {
+            return item.answer;
+          })
+        );
+      });
+      sectionPrompts(s).forEach(function (id) {
+        var p = PROMPTS[id];
+        if (!p || seen[id] || inList(id) || !value(id).trim() || (p.requiredIf && !isRequired(p))) return;
+        seen[id] = true;
+        items.push({ label: p.shortLabel || p.label, answer: describeAnswer(id), note: null, missing: "" });
+      });
+      if (items.length) out.push({ title: "Also recorded: " + (FILE_STEP ? "Step " + outlineNumber(s.id) + ", " : "") + s.title, items: items });
+    });
+    return out;
   }
 
   function listItems(blockIds) {
@@ -1434,15 +1476,7 @@
       onclick: function () {
         refresh();
         try {
-          var blob = new Blob([reportDocument(reportModel(config))], { type: "text/html;charset=utf-8" });
-          var url = URL.createObjectURL(blob);
-          var a = el("a", { href: url, download: config.filename });
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          window.setTimeout(function () {
-            URL.revokeObjectURL(url);
-          }, 1000);
+          saveBlob(new Blob([reportDocument(reportModel(config))], { type: "text/html;charset=utf-8" }), config.filename);
           status.className = "status-message ok";
           status.textContent = "Report downloaded as " + config.filename + ". Check your downloads folder. If nothing downloaded, use Print or save as PDF.";
         } catch (e) {
@@ -1470,6 +1504,55 @@
     wrapper.addEventListener("input", refresh);
     main.appendChild(wrapper);
   }
+
+  function saveBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = el("a", { href: url, download: filename });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
+  }
+
+  // ---------- Export to Word (header button, on every page) ----------
+
+  var exportStatus = document.getElementById("export-status");
+  var exportTimer = null;
+
+  function exportWord() {
+    var config = CASE.report;
+    var name = config.filename.replace(/\.html?$/i, "") + ".docx";
+    var ok = true;
+    try {
+      saveBlob(window.EthosDocx.build(reportModel(config)), name);
+    } catch (e) {
+      ok = false;
+    }
+    var missing = allMissing().length;
+    var msg = ok
+      ? "Saved " + name + " with everything entered so far" + (missing ? " (" + missing + " required " + (missing === 1 ? "answer" : "answers") + " still to write)" : "") + ". Check your downloads folder."
+      : "The Word export did not work in this browser. Use Download report or Print on the report page instead.";
+    exportStatus.textContent = msg;
+    exportStatus.className = "export-status show" + (ok ? "" : " fail");
+    window.clearTimeout(exportTimer);
+    exportTimer = window.setTimeout(function () {
+      exportStatus.className = "export-status";
+      exportStatus.textContent = "";
+    }, 8000);
+  }
+
+  document.getElementById("export-word").addEventListener("click", exportWord);
+
+  // The header stays on screen; keep the navigation column and scrolled-to fields clear of it.
+  var header = document.querySelector(".case-header");
+  function measureHeader() {
+    document.documentElement.style.setProperty("--header-h", header.offsetHeight + "px");
+  }
+  measureHeader();
+  if (window.ResizeObserver) new ResizeObserver(measureHeader).observe(header);
+  else window.addEventListener("resize", measureHeader);
 
   // ---------- Page views ----------
 

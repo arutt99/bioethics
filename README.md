@@ -116,6 +116,8 @@ Cases written for the earlier guided version of the engine need converting once 
 
 A case split into parts (for example, so new information reaches the whole class at the same moment) produces one file per part. Each part's case file keeps the earlier items and adds its own, marked New. Give each part its own unrelated passphrase. List each part in `activities.json`. Announce the Part 2 code when you want the new information to arrive.
 
+Students can save their work at any point with **Export to Word** in the case header. It downloads a `.docx` file of everything entered so far, ready to upload to the LMS.
+
 Answers carry from Part 1 to Part 2 only in the same browser on the same device. Otherwise, students restate their provisional recommendation from their downloaded Part 1 record. Ask students to submit both the Part 1 record and the final report.
 
 ## Edit the activity list

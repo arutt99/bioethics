@@ -22,18 +22,28 @@
         <h1 class="case-title">{{CASE_TITLE}}</h1>
       </div>
     </div>
-    <a href="../">Back to all cases</a>
+    <div class="header-actions">
+      <button type="button" class="export-btn" id="export-word">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 2h7l4 4v12H5zM12 2v4h4M10 9v6M7.5 12.5 10 15l2.5-2.5"/></svg>
+        Export to Word
+      </button>
+      <a href="../">Back to all cases</a>
+    </div>
   </div>
+  <p class="export-status" id="export-status" role="status"></p>
 </header>
 <div class="layout">
   <nav class="progress" id="progress" aria-label="Consultation sections"></nav>
   <main class="panel" id="main" tabindex="-1"></main>
 </div>
 <footer class="site-footer">
-  <p>Answers stay in this browser unless you download your report. Using a shared computer? <button type="button" class="link-button" id="clear-saved">Clear my saved answers</button></p>
+  <p>Answers stay in this browser unless you export or download them. Using a shared computer? <button type="button" class="link-button" id="clear-saved">Clear my saved answers</button></p>
 </footer>
 <div class="visually-hidden" id="live" aria-live="polite"></div>
 <script id="ethos-case" type="application/json">{{CASE_JSON}}</script>
+<script>
+{{DOCX}}
+</script>
 <script>
 {{ENGINE}}
 </script>

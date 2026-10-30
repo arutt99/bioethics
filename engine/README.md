@@ -53,6 +53,8 @@ The **Report** page lists any missing required answers (each one links to its fi
 
 Other behavior:
 
+- **Export to Word** sits in the header, which stays at the top of the screen on every page. At any point it saves everything entered so far as a `.docx` file for uploading to the LMS. The file is named after the report (`report.filename` with `.docx`) and has a letterhead, case details, and every report section as a real Word heading. If required answers are still missing, it is marked as work in progress. The file is built in the browser, with no library or network, so the page's security policy is unchanged.
+- The report and the Word export never leave work out. Any answer a case's report outline doesn't list appears at the end under "Also recorded", by step.
 - Students can open the case file from any step, through the navigation column or the Back to the case file button. When they came from a step, the case file and every item offer **Return to Step N**, which takes them back to the box they were last writing in. Answers are kept throughout.
 - Item numbers follow release order and never change between parts, so you can say "Ana takes items 1 to 3" at a roundtable.
 - In a later part, the case file keeps every earlier item and adds the new ones at the top under **New in Part 2**, with a New tag.

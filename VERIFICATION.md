@@ -176,3 +176,21 @@ Date: 2026-10-30. Same throwaway three-part case with `{ type: "dissent" }` in s
 | Consult note opens the Part 2 report and the final Part 3 report; the committee vote carries into the final report | Pass |
 | The consult note's addressee is not in the Part 1 file | Pass |
 | Report text escaped; no horizontal scrolling at 375 px; no console errors | Pass |
+
+# Verification record: Export to Word
+
+Date: 2026-10-30. Throwaway test cases, Chromium (Playwright). Exported files checked with python-docx and rendered with LibreOffice. Not yet opened in Microsoft Word itself or uploaded to the LMS.
+
+| Check | Result |
+| --- | --- |
+| Export to Word in the header on every page; reachable by keyboard (second tab stop) and works with Enter | Pass |
+| Export with nothing entered, and mid-case: valid .docx (zip intact, every part well-formed XML, opens in python-docx and LibreOffice) | Pass |
+| File named after the report (`look.docx`; a part's own record name in a multi-part case, `m1.docx`) | Pass |
+| Contents: letterhead, title, case details, work-in-progress note while answers are missing, consult note first, option lists, committee vote and minority view, case-file notes | Pass |
+| Text kept exactly: ampersands, angle brackets, quotation marks, apostrophes, accents, emoji, blank lines; control characters dropped | Pass |
+| Report sections are Word headings (Heading 1 and 2); document title set in the file's properties | Pass |
+| An answer the report outline doesn't list appears under "Also recorded" in both the report and the export | Pass |
+| Confirmation appears under the header and is announced; it doesn't push the page down | Pass |
+| Header stays at the top when scrolled; the workflow column stays on screen below it (this fixes a regression from the redesign) | Pass |
+| Phone: header 89 px tall, no horizontal scrolling | Pass |
+| Earlier suites re-run: 39, 27, 11, and 21 checks pass | Pass |

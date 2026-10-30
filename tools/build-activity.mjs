@@ -372,6 +372,7 @@ function render(data, pageTitle, eyebrow) {
     EYEBROW: escapeHTML(eyebrow),
     CSS: readFileSync(join(engineDir, "ethos-engine.css"), "utf8"),
     CASE_JSON: json,
+    DOCX: readFileSync(join(engineDir, "ethos-docx.js"), "utf8"),
     ENGINE: readFileSync(join(engineDir, "ethos-engine.js"), "utf8"),
   };
   return readFileSync(join(engineDir, "template.html"), "utf8").replace(/\{\{([A-Z_]+)\}\}/g, (m, k) => (k in swaps ? swaps[k] : m));
