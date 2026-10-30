@@ -31,6 +31,7 @@ tools/
   build-activity.mjs       builds private activity pages from a private case file
   migrate-case.mjs         converts an old guided-format case to the case-file format
   encrypt-activity.sh      encrypts one original into docs/activities/
+  encrypt-all.sh           encrypts every original in a folder, asking for each one's code
   password_template.html   the styled code-entry screen
   check.mjs                pre-publish check (npm run check)
 package.json               pins StatiCrypt 3.5.4
@@ -38,16 +39,34 @@ package.json               pins StatiCrypt 3.5.4
 
 ## The one rule
 
-**Original activity files and access codes never go in this repository**, not even briefly. Anything committed stays in the public history even after you delete it. Keep them in a private folder elsewhere on your computer, for example:
+**Original activity files and access codes never go in this repository**, not even briefly. Anything committed stays in the public history even after you delete it. Keep originals in a private folder outside this repository, and back that folder up to a **private** GitHub repository (see below), for example:
 
 ```text
-~/ETHOS-private/          ← never inside this repository
+~/ETHOS-private/          ← never inside this repository; pushed to the private repo arutt99/ethos-private
+  cases/
+    nurse-code.mjs        case files you (or Claude) edit
   originals/
-    consultation-01.html
-  codes.txt               ← or a password manager
+    nurse-code-part-1.html  built, unencrypted pages
 ```
 
+Keep the codes in a password manager, not in either repository.
+
 `.gitignore` blocks some common names as a backup, but it can't protect a file that's already committed.
+
+### The private repository
+
+The private repository holds the readable cases, so Claude Code can edit them in a cloud session without codes. Set it up once:
+
+1. On GitHub, create a new repository named `ethos-private` and choose **Private**. Don't add a README.
+2. On your computer, push your private folder to it:
+
+   ```bash
+   cd ~/ETHOS-private && git init -b main && git add . && git commit -m "Add ETHOS case files" && git remote add origin https://github.com/arutt99/ethos-private.git && git push -u origin main
+   ```
+
+3. Start Claude Code sessions with both repositories selected. Before you build or encrypt, run `git pull` in `~/ETHOS-private` to get Claude's edits.
+
+Never make this repository public, and never add collaborators you wouldn't give the codes to.
 
 ## One-time setup
 
@@ -75,14 +94,21 @@ This also turns on a pre-commit check (`.githooks/pre-commit`) that runs `npm ru
 
 1. Finish and test the original HTML in your private folder. Name it with lowercase letters, numbers, and hyphens, such as `consultation-01.html`. That name becomes its web address.
 2. Choose a passphrase of at least 16 characters as its code, such as four or more unrelated words. Don't reuse a code, and don't base it on the activity's name or the course. Anyone can download the encrypted page and try guesses on their own computer as fast as it allows, so length is what keeps the activity closed. Write it down privately.
-3. Encrypt it. The tool asks for the code twice and refuses codes shorter than 16 characters. The code never appears in a script or your shell history:
+3. Add an entry to `docs/data/activities.json` (see below).
+4. Encrypt it. The tool asks for the code twice and refuses codes shorter than 16 characters. The code never appears in a script or your shell history:
 
    ```bash
    tools/encrypt-activity.sh ~/ETHOS-private/originals/consultation-01.html "Bioethics Consultation"
    ```
 
    The encrypted copy is saved to `docs/activities/consultation-01.html`. The script refuses to run if the original is inside this repository.
-4. Add an entry to `docs/data/activities.json` (see below).
+
+   To encrypt several at once, use `encrypt-all.sh` with the folder instead. For each original it asks whether to encrypt it (press Enter for yes), then asks for that case's code. It takes each title from `activities.json` and skips any original that has no entry:
+
+   ```bash
+   tools/encrypt-all.sh ~/ETHOS-private/originals
+   ```
+
 5. Run the check, then preview the site locally:
 
    ```bash
@@ -108,7 +134,7 @@ New consultation cases can be written as a private case file and built with the 
 node tools/build-activity.mjs ~/ETHOS-private/cases/nurse-code.mjs ~/ETHOS-private/originals
 ```
 
-This writes one original per part into your private folder. Open them in a browser to review, then encrypt each with `tools/encrypt-activity.sh` as above.
+This writes one original per part into your private folder. Open them in a browser to review, then encrypt them with `tools/encrypt-all.sh ~/ETHOS-private/originals` as above.
 
 Cases written for the earlier guided version of the engine need converting once with `tools/migrate-case.mjs` (see [`engine/README.md`](engine/README.md)). The published nurse-code pages keep working as they are until you rebuild them.
 
@@ -173,13 +199,13 @@ This is practical control over *when* a class can open an activity. It is not id
 
 - Students can share codes with each other.
 - Once unlocked, an activity can be saved by the student.
-- The code-entry screen asks for the code again after every reload. It doesn't remember codes.
+- A student can tick **Remember this code on this device** so a reload doesn't ask again. It's ticked by default, lasts 30 days, and applies only to that one case: each case is still locked by its own code. Anyone using that browser can open the remembered case, so students should untick it on shared computers.
 - Nothing is collected centrally. Student work leaves the browser only through the activity's own report download, if it has one.
 
 ### Security settings built into the site
 
 - **Content Security Policy.** Every page carries a policy in a `<meta>` tag, because GitHub Pages can't send security headers. The homepage may load only this site's own files. Activity pages may run only their own inline code, and the policy stays in force after the code is entered, so an activity can't fetch anything or send student answers anywhere. As a result, activities must be self-contained: images must be embedded (`data:` URLs) or placed next to the page, and nothing can load from other websites. `npm run check` fails if a page loses its policy.
-- **No "remember me".** Codes aren't stored in the browser. `npm run check` fails if an activity was encrypted with remembering turned on.
+- **Limited "remember me".** A remembered code is stored in that browser for 30 days, under a key for that one page, so it never opens or erases another case. `npm run check` fails if a page remembers codes without these limits, and warns about pages encrypted before remembering was added.
 - **No referrer.** Pages tell the browser not to pass their address to other sites.
 - **Pre-publish checks** run on your computer before each commit and on GitHub on every push. They fail if a page in `docs/activities/` isn't encrypted, if any page other than the homepage is published, or if an unencrypted activity original is found anywhere in the repository.
 - **Pinned tools.** StatiCrypt is pinned to an exact version, and the GitHub Actions in the check workflow are pinned to exact commits. Dependabot proposes updates to the actions as pull requests for you to review.

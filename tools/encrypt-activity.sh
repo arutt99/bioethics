@@ -65,13 +65,17 @@ if (( ${#code} < min_length )); then
 fi
 unset code_again
 
+# Students can tick "Remember this code" so a reload doesn't ask again. The template stores it for this page only.
+remember_days=30
+
 # The code is passed only to StatiCrypt's environment: never on the command line, in history, or on disk.
 STATICRYPT_PASSWORD="$code" "$repo_root/node_modules/.bin/staticrypt" "$original_abs" \
   --directory "$repo_root/docs/activities" \
   --config false \
-  --remember false \
+  --remember "$remember_days" \
   --template "$repo_root/tools/password_template.html" \
   --template-title "$title" \
+  --template-remember "Remember this code on this device" \
   --template-instructions "Enter the access code your instructor gave you for this case." \
   --template-placeholder "Access code" \
   --template-button "Open case file" \
@@ -79,4 +83,6 @@ STATICRYPT_PASSWORD="$code" "$repo_root/node_modules/.bin/staticrypt" "$original
 
 echo
 echo "Encrypted: docs/activities/$name"
-echo "Next: add or update its entry in docs/data/activities.json, then run 'npm run check'."
+if [[ -z "${ETHOS_BATCH:-}" ]]; then
+  echo "Next: add or update its entry in docs/data/activities.json, then run 'npm run check'."
+fi

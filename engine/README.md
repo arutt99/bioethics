@@ -12,7 +12,7 @@ private case file (.mjs) ──build──▶ private original(s) ──encrypt�
 node tools/build-activity.mjs ~/ETHOS-private/cases/nurse-code.mjs ~/ETHOS-private/originals
 ```
 
-Then open the built file in a browser to review it, and encrypt each part with `tools/encrypt-activity.sh`, using an unrelated passphrase for each part.
+Then open the built file in a browser to review it, and encrypt the parts with `tools/encrypt-all.sh ~/ETHOS-private/originals`, using an unrelated passphrase for each part.
 
 The build refuses to write inside this repository. It removes every key named `notes` (instructor notes) and fails if a part would contain text from a later part.
 

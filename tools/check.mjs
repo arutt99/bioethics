@@ -48,8 +48,13 @@ const hasPolicy = (html) => /<meta\s+http-equiv="Content-Security-Policy"\s+cont
 const salts = new Map();
 
 function checkEncryptedPage(rel, html) {
-  if (!/"isRememberEnabled":false/.test(html)) {
-    errors.push(`${rel} lets browsers remember the code. Re-encrypt it with tools/encrypt-activity.sh.`);
+  // Remembering is allowed only for a limited time and only under a key for this page, so one
+  // case's code never opens, or erases, another's.
+  const days = Number((html.match(/"rememberDurationInDays":(\d+)/) || [])[1]);
+  if (/"isRememberEnabled":false/.test(html)) {
+    warnings.push(`${rel} uses older settings and asks for the code on every reload. Re-encrypt it to let students stay in.`);
+  } else if (!html.includes('"staticrypt_passphrase:" + location.pathname') || !(days > 0 && days <= 30)) {
+    errors.push(`${rel} remembers codes without the site's limits. Re-encrypt it with tools/encrypt-activity.sh.`);
   }
   if (!hasPolicy(html)) {
     errors.push(`${rel} has no Content-Security-Policy. Re-encrypt it with tools/encrypt-activity.sh.`);

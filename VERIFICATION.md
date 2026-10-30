@@ -16,7 +16,7 @@ Date: 2026-10-29. StatiCrypt 3.5.4. Chromium (Playwright), served locally under 
 | Navigation, required-field validation, and report download work after decryption, including apostrophes and non-ASCII text | Pass |
 | No horizontal scrolling at 360 px wide (homepage and code prompt) | Pass |
 | "Open activity" link reachable and activated by keyboard; code entered and submitted by keyboard | Pass |
-| Reload asks for the code again (no "remember me") | Pass |
+| Reload asks for the code again (no "remember me"; superseded by per-case "remember me" below) | Pass |
 | Missing or malformed `activities.json` shows a readable message | Pass |
 | Unsafe `path` values rejected; settings text rendered as text, not HTML | Pass |
 | `npm run check` fails when an unencrypted page is placed in `docs/activities/` | Pass |
@@ -194,3 +194,17 @@ Date: 2026-10-30. Throwaway test cases, Chromium (Playwright). Exported files ch
 | Header stays at the top when scrolled; the workflow column stays on screen below it (this fixes a regression from the redesign) | Pass |
 | Phone: header 89 px tall, no horizontal scrolling | Pass |
 | Earlier suites re-run: 39, 27, 11, and 21 checks pass | Pass |
+
+## Per-case "remember me" and encrypt-all
+
+Date: 2026-10-30. StatiCrypt 3.5.4. Chromium (Playwright), two test cases with different codes.
+
+| Check | Result |
+| --- | --- |
+| "Remember this code on this device" shows on the code prompt, ticked, with no horizontal scrolling at 420 px | Pass |
+| With the box ticked, reloading a case opens it without the code | Pass |
+| A remembered code for one case doesn't open another case, and the other case's code is still required | Pass |
+| With the box unticked, reloading asks for the code again | Pass |
+| Unlocking a second case doesn't erase the first case's remembered code (one storage key per page) | Pass |
+| `tools/encrypt-all.sh` asks per original, takes titles from `activities.json`, carries on after a mismatched code, and never echoes codes | Pass |
+| `npm run check` fails on a page that remembers codes forever or under StatiCrypt's shared key, and warns on pages encrypted before this change | Pass |
