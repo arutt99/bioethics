@@ -123,7 +123,7 @@ dementia: {
 
 | Block | Contents |
 | --- | --- |
-| `options` | Students list their own options. `{ id, heading, intro[], fields[{ key, label, help }], min (default 2), max (default 6), required, addLabel, reportLabel }`. Each option has a name plus these fields |
+| `options` | Students list their own options. `{ id, heading, intro[], fields[{ key, label, help }], min (default 2), max (default 6), required, addLabel, reportLabel, nameLabel, nameHelp }`. An option is a course of action someone in the case could take, such as "tell the truth" or "shade the truth". Each one has a name plus these fields. The name's help text defaults to "A course of action someone in the case could take, in a few words." Set `nameHelp` to give a case-specific example |
 | `optionFields` | More fields for each named option from an `options` block, in a later step. `{ list, heading, intro[], fields[{ key, label }], required }` |
 | `perspectives` | Either `{ heading, intro[], prompt }` for a `choice` prompt (shows the chosen option and the rest), or `{ heading, intro[], after, options }` to show an option set only once the prompt named by `after` is answered |
 
@@ -150,7 +150,7 @@ export default {
     {
       id: "options",
       title: "Identify the options and their likely consequences",
-      blocks: [{ type: "options", id: "opts", intro: ["List every option you can see, including ones you'd reject."], fields: [{ key: "consequences", label: "Likely consequences" }] }],
+      blocks: [{ type: "options", id: "opts", intro: ["List every course of action you can see, including ones you'd reject."], nameHelp: "For example: tell the truth, or shade the truth.", fields: [{ key: "consequences", label: "Likely consequences" }] }],
     },
     {
       id: "arguments",

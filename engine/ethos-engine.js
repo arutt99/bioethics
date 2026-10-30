@@ -162,7 +162,14 @@
       ids.forEach(function (uid, n) {
         var label = "Option " + (n + 1);
         var nameId = bid + "." + uid + ".name";
-        PROMPTS[nameId] = { id: nameId, type: "text", label: "Name this option", shortLabel: label + ": name", required: true };
+        PROMPTS[nameId] = {
+          id: nameId,
+          type: "text",
+          label: b.nameLabel || "Name this option",
+          help: b.nameHelp || "A course of action someone in the case could take, in a few words.",
+          shortLabel: label + ": name",
+          required: true,
+        };
         (b.allFields || b.fields || []).forEach(function (f) {
           var fid = bid + "." + uid + "." + f.key;
           PROMPTS[fid] = { id: fid, type: "textarea", label: f.label, help: f.help, rows: f.rows || 3, shortLabel: (optionName(bid, uid) || label) + ": " + f.label, required: f.required !== false };
