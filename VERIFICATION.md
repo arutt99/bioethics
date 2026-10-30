@@ -83,3 +83,114 @@ Date: 2026-10-29. StatiCrypt 3.5.4. Chromium (Playwright), served locally under 
 
 - Right-code decryption of the three published activities under the policy (their codes aren't in this environment). Test each one once after deploying.
 - Whether the policy stays in force after decryption in Firefox and Safari. If it doesn't, nothing breaks, but those browsers lose that extra layer.
+
+# Verification record: case-file engine
+
+Date: 2026-10-30. Engine rebuilt around a case file and an open worksheet (`schemaVersion: 2`). Tested with a throwaway two-part fictional case kept outside the repository, in Chromium (Playwright). The published nurse-code pages were not rebuilt; they still use the earlier engine until the private case is converted.
+
+| Check | Result |
+| --- | --- |
+| Opening screen shows Open the case file first | Pass |
+| Case file groups tiles by kind (records, people, medical background, policies), in any order, nothing required | Pass |
+| Medical background item shows the plain-language disclaimer | Pass |
+| Item numbers stay the same across parts; Part 2 shows new items first, marked New, with Part 1 items below | Pass |
+| Opened status carries between parts in the same browser | Pass |
+| Worksheet sections open in any order; status shows Not started, In progress, or Complete | Pass |
+| Report page lists missing required answers; each link moves focus to its field and shows an inline message that clears on typing | Pass |
+| Incomplete report can be downloaded and says how many answers were missing | Pass |
+| Case-file notes appear in the report, escaped | Pass |
+| Option comparison stays hidden until a recommendation is chosen | Pass |
+| Conditional field appears when its option is chosen and is listed as missing if empty | Pass |
+| Part 2 in a fresh browser asks students to restate earlier answers; report notes the restatement | Pass |
+| Part 1 file contains no Part 2 content; instructor notes removed | Pass |
+| Keyboard: tiles open with Enter, focus moves to the page heading | Pass |
+| No horizontal scrolling at 360 px wide | Pass |
+| No console or policy errors | Pass |
+| `tools/migrate-case.mjs` converts an old-format test case, and the result builds; the build refuses old-format cases with a pointer to the converter | Pass |
+| `npm run check` | Pass |
+
+## Not yet checked
+
+- The converted nurse-code case (the private case file isn't in this environment)
+- Encrypted copies of case-file pages on the live site
+- Screen reader pass, real phones, Safari and Firefox
+- Classroom timing for the roundtable format
+
+# Verification record: six-step method
+
+Date: 2026-10-30. Tested with a throwaway three-part fictional case built around the six steps (Part 1: steps 1 to 5; Part 2: new information and step 6 action plan; Part 3: follow-up and step 6 assessment), kept outside the repository. Chromium (Playwright). The earlier case-file checks were re-run and still pass.
+
+| Check | Result |
+| --- | --- |
+| Navigation lists the six steps in order, with the case file as step 2 and the follow-up as a second step 6 | Pass |
+| Step 3 starts with two empty options; Add focuses the new option; Remove asks first when there's text, and isn't offered below the minimum | Pass |
+| Step 4 shows each named option, by name, with its argument fields; before any option is named it points back to step 3 and shows Not started | Pass |
+| Step 5 offers the student's own options; renaming an option after choosing keeps the choice | Pass |
+| The case's own options stay hidden until a choice is made, then open on the same page | Pass |
+| Report lists each option with its consequences and arguments, and the chosen option by its current name; text escaped | Pass |
+| A Part 3 report includes the Part 1 option list in the same browser, and says "No options listed" in a fresh one | Pass |
+| No horizontal scrolling at 360 px; no console or policy errors | Pass |
+| `npm run check` | Pass |
+
+# Verification record: return to step
+
+Date: 2026-10-30. Same throwaway cases, Chromium (Playwright). Earlier suites re-run: 39 and 27 checks pass.
+
+| Check | Result |
+| --- | --- |
+| Leaving a step for the case file offers "Return to Step N: title" on the case file and on every item, including after Next item | Pass |
+| Return goes back to the step, with focus in the field last written in; answers kept | Pass |
+| Also offered when the case file is opened from the navigation column | Pass |
+| Not offered when the case file is opened from the overview; cleared after moving to another step | Pass |
+| Cases without numbered steps say "Return to" plus the section title | Pass |
+
+# Verification record: committee design
+
+Date: 2026-10-30. Visual redesign of the homepage, the code prompt, and the engine. Chromium (Playwright), at 1280 px and 375 px wide. Throwaway test cases and a throwaway code, kept outside the repository.
+
+| Check | Result |
+| --- | --- |
+| Earlier suites still pass: case file 39, six-step method 27, return to step 11 | Pass |
+| Every text colour pair at least 4.5:1, and control edges at least 3:1 (27 pairs checked) | Pass |
+| No horizontal scrolling at 375 px on the homepage, case file, and a chart | Pass |
+| Homepage under its Content Security Policy: lists cases, no console or policy errors | Pass |
+| Code prompt built with the new template: wrong code shows the error, right code opens the case | Pass |
+| Chart fields use a description list (label and value read together) | Pass |
+
+## Not yet checked
+
+- The published activities still use the previous code prompt until they are encrypted again with the new template
+- Windows high-contrast mode on a real machine, Safari and Firefox, a screen reader pass
+
+# Verification record: committee vote and consult note
+
+Date: 2026-10-30. Same throwaway three-part case with `{ type: "dissent" }` in step 5 (Part 1) and a `consultNote` in step 6 (Part 2). Chromium (Playwright). Earlier suites re-run: 39, 27, and 11 checks pass.
+
+| Check | Result |
+| --- | --- |
+| Committee vote appears; Minority view opens only for Not unanimous and is then required (listed as missing, link focuses it) | Pass |
+| Switching back to Unanimous keeps the written minority view on screen, labelled as left out of the report, and leaves it out of the report | Pass |
+| Part 1 report closes with the committee vote and minority view without the case listing them | Pass |
+| Consult note addressed To the requesting clinician, From the committee (with the team name in the report), Re the case, dated | Pass |
+| Word count updates as students type, warns past the guide, and announces crossing it once; never blocks | Pass |
+| Consult note opens the Part 2 report and the final Part 3 report; the committee vote carries into the final report | Pass |
+| The consult note's addressee is not in the Part 1 file | Pass |
+| Report text escaped; no horizontal scrolling at 375 px; no console errors | Pass |
+
+# Verification record: Export to Word
+
+Date: 2026-10-30. Throwaway test cases, Chromium (Playwright). Exported files checked with python-docx and rendered with LibreOffice. Not yet opened in Microsoft Word itself or uploaded to the LMS.
+
+| Check | Result |
+| --- | --- |
+| Export to Word in the header on every page; reachable by keyboard (second tab stop) and works with Enter | Pass |
+| Export with nothing entered, and mid-case: valid .docx (zip intact, every part well-formed XML, opens in python-docx and LibreOffice) | Pass |
+| File named after the report (`look.docx`; a part's own record name in a multi-part case, `m1.docx`) | Pass |
+| Contents: letterhead, title, case details, work-in-progress note while answers are missing, consult note first, option lists, committee vote and minority view, case-file notes | Pass |
+| Text kept exactly: ampersands, angle brackets, quotation marks, apostrophes, accents, emoji, blank lines; control characters dropped | Pass |
+| Report sections are Word headings (Heading 1 and 2); document title set in the file's properties | Pass |
+| An answer the report outline doesn't list appears under "Also recorded" in both the report and the export | Pass |
+| Confirmation appears under the header and is announced; it doesn't push the page down | Pass |
+| Header stays at the top when scrolled; the workflow column stays on screen below it (this fixes a regression from the redesign) | Pass |
+| Phone: header 89 px tall, no horizontal scrolling | Pass |
+| Earlier suites re-run: 39, 27, 11, and 21 checks pass | Pass |

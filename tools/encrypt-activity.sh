@@ -72,9 +72,9 @@ STATICRYPT_PASSWORD="$code" "$repo_root/node_modules/.bin/staticrypt" "$original
   --remember false \
   --template "$repo_root/tools/password_template.html" \
   --template-title "$title" \
-  --template-instructions "Enter the access code your instructor gave you for this activity." \
+  --template-instructions "Enter the access code your instructor gave you for this case." \
   --template-placeholder "Access code" \
-  --template-button "Open activity" \
+  --template-button "Open case file" \
   --template-error "That code did not work. Check it and try again."
 
 echo

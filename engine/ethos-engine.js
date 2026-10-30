@@ -2,19 +2,50 @@
  * ETHOS consultation engine.
  *
  * Renders one case (or one part of a case) from the JSON in
- * <script id="ethos-case" type="application/json">. Case text is always
- * inserted with textContent, never as HTML. See engine/README.md for the
- * case format.
+ * <script id="ethos-case" type="application/json">. A case has two areas:
+ * a case file of items students open in any order, and a worksheet of
+ * written sections they answer in any order. Case text is always inserted
+ * with textContent, never as HTML. See engine/README.md for the case format.
  */
 (function () {
   "use strict";
 
   var CASE = JSON.parse(document.getElementById("ethos-case").textContent);
   var PART = CASE.part; // the part this file contains, or null for a single-file case
-  var STAGES = CASE.stages;
+  var ITEMS = CASE.items;
+  var ITEM_ORDER = CASE.itemOrder;
+  var SECTIONS = CASE.worksheet;
   var PROMPTS = CASE.prompts;
   var STORAGE_KEY = "ethos:" + CASE.id + ":schema" + CASE.schemaVersion;
   var POSITION = PART ? PART.id : "single";
+
+  var KINDS = [
+    { id: "record", heading: "Records and documents", label: "Record", look: "chart" },
+    { id: "person", heading: "People involved", label: "Person", look: "interview" },
+    { id: "background", heading: "Medical background", label: "Medical background", look: "reference" },
+    { id: "policy", heading: "Policies, codes and law", label: "Policy", look: "document", band: "Policy, code, or law" },
+  ];
+  // The band at the top of each item's sheet. A case can set an item's "look".
+  var LOOKS = {
+    chart: "Clinical record",
+    interview: "Interview",
+    reference: "Plain-language reference",
+    document: "Document",
+    letter: "Correspondence",
+  };
+  function kind(id) {
+    for (var i = 0; i < KINDS.length; i++) if (KINDS[i].id === id) return KINDS[i];
+    return KINDS[0];
+  }
+
+  // Every case-file item gets a notes field unless the case turns it off.
+  ITEM_ORDER.forEach(function (id) {
+    var it = ITEMS[id];
+    var nid = "notes." + id;
+    if (it.noteField !== false && !PROMPTS[nid]) {
+      PROMPTS[nid] = { id: nid, type: "textarea", label: it.noteLabel || "Your notes on this item", shortLabel: it.number + ". " + it.title, rows: 4 };
+    }
+  });
 
   var main = document.getElementById("main");
   var nav = document.getElementById("progress");
@@ -37,8 +68,8 @@
       caseId: CASE.id,
       caseVersion: CASE.version,
       responses: {},
-      completed: {},
-      visited: {},
+      opened: {},
+      lists: {},
       restated: {},
       position: {},
       updated: null,
@@ -93,6 +124,70 @@
     return typeof v === "string" ? v : "";
   }
 
+  // ---------- Student-written options ----------
+  // An "options" block lets students list their own options. Each option gets a
+  // name field and the block's fields (for example consequences, arguments for
+  // and against), registered as ordinary prompts with ids "<block>.<uid>.<key>".
+
+  var OPTION_BLOCKS = {};
+  Object.keys(CASE.lists || {}).forEach(function (bid) {
+    OPTION_BLOCKS[bid] = { block: CASE.lists[bid], section: null };
+  });
+  SECTIONS.forEach(function (s) {
+    s.blocks.forEach(function (b) {
+      if (b.type === "options") OPTION_BLOCKS[b.id] = { block: b, section: s };
+    });
+  });
+
+  function listIds(blockId) {
+    var l = state.lists[blockId];
+    return Array.isArray(l) ? l : [];
+  }
+
+  function optionName(blockId, uid) {
+    return value(blockId + "." + uid + ".name").trim();
+  }
+
+  function namedOptions(blockId) {
+    return listIds(blockId).filter(function (uid) {
+      return optionName(blockId, uid);
+    });
+  }
+
+  function newUid() {
+    return "o" + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+  }
+
+  function syncOptionPrompts() {
+    Object.keys(OPTION_BLOCKS).forEach(function (bid) {
+      var b = OPTION_BLOCKS[bid].block;
+      var ids = listIds(bid).slice();
+      // Every list in this part starts with the minimum number of empty options.
+      if (OPTION_BLOCKS[bid].section) {
+        while (ids.length < (b.min || 2)) ids.push(newUid());
+        state.lists[bid] = ids;
+      }
+      ids.forEach(function (uid, n) {
+        var label = "Option " + (n + 1);
+        var nameId = bid + "." + uid + ".name";
+        PROMPTS[nameId] = {
+          id: nameId,
+          type: "text",
+          label: b.nameLabel || "Name this option",
+          help: b.nameHelp || "A course of action someone in the case could take, in a few words.",
+          shortLabel: label + ": name",
+          required: true,
+        };
+        (b.allFields || b.fields || []).forEach(function (f) {
+          var fid = bid + "." + uid + "." + f.key;
+          PROMPTS[fid] = { id: fid, type: "textarea", label: f.label, help: f.help, rows: f.rows || 3, shortLabel: (optionName(bid, uid) || label) + ": " + f.label, required: f.required !== false };
+        });
+      });
+    });
+  }
+
+  syncOptionPrompts();
+
   // ---------- DOM helpers ----------
 
   function el(tag, attrs, children) {
@@ -120,6 +215,28 @@
     });
   }
 
+  function bullets(list) {
+    return el(
+      "ul",
+      null,
+      list.map(function (t) {
+        return el("li", { text: t });
+      })
+    );
+  }
+
+  function recordTable(rows) {
+    return el("table", { className: "record" }, [
+      el(
+        "tbody",
+        null,
+        rows.map(function (r) {
+          return el("tr", null, [el("th", { scope: "row", text: r[0] }), el("td", { text: r[1] })]);
+        })
+      ),
+    ]);
+  }
+
   function announce(msg) {
     liveRegion.textContent = "";
     window.setTimeout(function () {
@@ -128,7 +245,7 @@
   }
 
   var uid = 0;
-  function disclosure(title, bodyNodes, onOpen, headingTag) {
+  function disclosure(title, bodyNodes, headingTag) {
     var id = "disc-" + ++uid;
     var body = el("div", { className: "disclosure-body", id: id, hidden: true }, bodyNodes);
     var btn = el("button", {
@@ -141,128 +258,268 @@
         var open = btn.getAttribute("aria-expanded") !== "true";
         btn.setAttribute("aria-expanded", String(open));
         body.hidden = !open;
-        if (open && onOpen) onOpen();
       },
     });
     return el("div", { className: "disclosure" }, [el(headingTag || "h5", null, [btn]), body]);
   }
 
-  // ---------- Stage logic ----------
+  // ---------- Worksheet logic ----------
 
-  function stageIndex(id) {
-    for (var i = 0; i < STAGES.length; i++) if (STAGES[i].id === id) return i;
+  function sectionIndex(id) {
+    for (var i = 0; i < SECTIONS.length; i++) if (SECTIONS[i].id === id) return i;
     return -1;
   }
+
+  function outlineNumber(id) {
+    for (var i = 0; i < CASE.outline.length; i++) if (CASE.outline[i].id === id) return CASE.outline[i].number;
+    return 0;
+  }
+
+  // When the case file is one of the numbered steps (caseFile.step), the steps are
+  // the worksheet sections plus the case file.
+  var FILE_STEP = (CASE.caseFile && CASE.caseFile.step) || null;
+  var STEP_COUNT = Math.max.apply(
+    null,
+    [FILE_STEP || 0].concat(
+      CASE.outline.map(function (o) {
+        return o.number;
+      })
+    )
+  );
 
   function isRequired(p) {
     if (p.requiredIf) return value(p.requiredIf.prompt) === p.requiredIf.equals;
     return !!p.required;
   }
 
-  // Prompts a stage asks for, including restatements of earlier-part answers
+  // Prompts a section asks for, including restatements of earlier-part answers
   // that this browser does not have.
-  function stagePrompts(stage) {
+  function sectionPrompts(section) {
     var ids = [];
-    stage.blocks.forEach(function (b) {
-      if (b.type === "prompts") ids = ids.concat(b.ids);
+    section.blocks.forEach(function (b) {
+      if (b.type === "prompts" || b.type === "consultNote") ids = ids.concat(b.ids);
+      if (b.type === "options") {
+        listIds(b.id).forEach(function (uid) {
+          ids.push(b.id + "." + uid + ".name");
+          (b.fields || []).forEach(function (f) {
+            ids.push(b.id + "." + uid + "." + f.key);
+          });
+        });
+      }
+      if (b.type === "optionFields") {
+        namedOptions(b.list).forEach(function (uid) {
+          b.fields.forEach(function (f) {
+            ids.push(b.list + "." + uid + "." + f.key);
+          });
+        });
+      }
       if (b.type === "carryForward") {
         b.ids.forEach(function (id) {
           if (!value(id) || state.restated[id]) ids.push(id);
         });
       }
-      if (b.type === "report" && b.teamFields) ids = ids.concat(b.teamFields);
     });
     return ids;
   }
 
-  function stakeholderIds(stage) {
-    var ids = [];
-    stage.blocks.forEach(function (b) {
-      if (b.type === "stakeholders" && b.requireAll) ids = ids.concat(b.ids);
-    });
-    return ids;
-  }
-
-  function problems(stage) {
-    var out = [];
-    stakeholderIds(stage).forEach(function (sid) {
-      if (!state.visited[sid]) {
-        var s = CASE.stakeholders[sid];
-        out.push({ id: "stakeholder-" + sid, message: "Open at least one question in the interview with " + s.name + "." });
-      }
-    });
-    stagePrompts(stage).forEach(function (id) {
+  function missingIn(section) {
+    return sectionPrompts(section).filter(function (id) {
       var p = PROMPTS[id];
-      if (p && isRequired(p) && !value(id).trim()) {
-        out.push({ id: id, message: p.errorText || (p.type === "choice" ? "Choose an option: " : "Write a response: ") + p.label });
-      }
+      return p && isRequired(p) && !value(id).trim();
+    });
+  }
+
+  function sectionStatus(section) {
+    var ids = sectionPrompts(section);
+    if (!ids.length) {
+      // A step that works from the option list has nothing to show until options are named.
+      var needsOptions = section.blocks.some(function (b) {
+        return b.type === "optionFields";
+      });
+      return needsOptions ? "Not started" : null;
+    }
+    var answered = ids.some(function (id) {
+      return value(id).trim();
+    });
+    if (!missingIn(section).length && answered) return "Complete";
+    return answered ? "In progress" : "Not started";
+  }
+
+  function allMissing() {
+    var out = [];
+    SECTIONS.forEach(function (s) {
+      missingIn(s).forEach(function (id) {
+        out.push({ section: s, id: id });
+      });
     });
     return out;
   }
 
-  function canOpen(i) {
-    if (i <= 0) return true;
-    return !!state.completed[STAGES[i - 1].id] && canOpen(i - 1);
+  function sectionWithPrompt(promptId) {
+    for (var i = 0; i < SECTIONS.length; i++) {
+      if (sectionPrompts(SECTIONS[i]).indexOf(promptId) !== -1) return SECTIONS[i];
+    }
+    return null;
   }
+
+  // ---------- Views ----------
 
   function currentView() {
     return state.position[POSITION] || "start";
   }
 
-  function go(view) {
+  function go(view, focusTarget) {
+    trackReturn(currentView(), view);
     state.position[POSITION] = view;
+    // Remember the last place worked on, for "Continue where you left off".
+    if (view !== "start") state.position[POSITION + ":last"] = view;
     save();
     render();
-    var heading = main.querySelector("h2");
-    if (heading) {
-      heading.setAttribute("tabindex", "-1");
-      heading.focus();
+    var target = focusTarget || main.querySelector("h2");
+    if (target) {
+      if (!focusTarget) target.setAttribute("tabindex", "-1");
+      target.focus();
+      if (focusTarget) target.scrollIntoView({ block: "center" });
+      else window.scrollTo(0, 0);
     }
-    window.scrollTo(0, 0);
+  }
+
+  // Leaving a worksheet step for the case file remembers the step and the last field
+  // written in, so the case file can offer a way straight back to it.
+  var RETURN_KEY = POSITION + ":return";
+  var lastField = null;
+  var returnField = null;
+
+  main.addEventListener("focusin", function (e) {
+    var t = e.target;
+    if (currentView().indexOf("ws:") === 0 && t.id && (t.tagName === "TEXTAREA" || t.tagName === "INPUT")) lastField = t.id;
+  });
+
+  function inCaseFile(view) {
+    return view === "file" || view.indexOf("item:") === 0;
+  }
+
+  function trackReturn(from, to) {
+    if (from.indexOf("ws:") === 0 && inCaseFile(to)) {
+      state.position[RETURN_KEY] = from;
+      returnField = lastField;
+    } else if (!inCaseFile(to)) {
+      delete state.position[RETURN_KEY];
+    }
+    if (from !== to) lastField = null;
+  }
+
+  function returnButton(className) {
+    var view = state.position[RETURN_KEY];
+    var i = view ? sectionIndex(view.slice(3)) : -1;
+    if (i === -1) return null;
+    var section = SECTIONS[i];
+    return el("button", {
+      type: "button",
+      className: className,
+      text: "Return to " + (FILE_STEP ? "Step " + outlineNumber(section.id) + ": " : "") + section.title,
+      onclick: function () {
+        var id = returnField;
+        go(view);
+        var field = id && document.getElementById(id);
+        if (field) {
+          field.focus();
+          field.scrollIntoView({ block: "center" });
+        }
+      },
+    });
+  }
+
+  function goToPrompt(section, promptId) {
+    go("ws:" + section.id);
+    var field = main.querySelector('.field[data-prompt="' + promptId + '"]');
+    if (!field) return;
+    field.hidden = false;
+    fieldError(field, "This answer is required.");
+    var target = document.getElementById(domId(promptId));
+    if (target && target.tagName === "FIELDSET") target = target.querySelector("input") || target;
+    if (target) {
+      target.focus();
+      target.scrollIntoView({ block: "center" });
+    }
   }
 
   // ---------- Navigation column ----------
 
+  function navButton(view, number, title, status, current, extraClass) {
+    var label = [];
+    label.push(el("span", { className: "num", text: number, "aria-hidden": "true" }));
+    label.push(el("span", null, [title, status ? el("span", { className: "status", text: status }) : null]));
+    return el(
+      "button",
+      {
+        type: "button",
+        className: "step" + (extraClass ? " " + extraClass : ""),
+        "aria-current": current ? "page" : null,
+        onclick: function () {
+          go(view);
+        },
+      },
+      label
+    );
+  }
+
   function renderNav() {
     nav.textContent = "";
     var view = currentView();
+    nav.appendChild(el("h2", { text: "Consultation" }));
+
+    var openedCount = ITEM_ORDER.filter(function (id) {
+      return state.opened[id];
+    }).length;
+    var cf = CASE.caseFile || {};
+    function fileButton(number) {
+      return navButton("file", number, cf.navLabel || "Case file", openedCount + " of " + ITEM_ORDER.length + " items opened", view === "file" || view.indexOf("item:") === 0);
+    }
+    var top = el("ul", null, [el("li", null, [navButton("start", "•", "Overview", null, view === "start")])]);
+    if (!FILE_STEP) top.appendChild(el("li", null, [fileButton("•")]));
+    nav.appendChild(top);
+
+    nav.appendChild(el("h3", { text: FILE_STEP ? "Steps" : "Worksheet" }));
     var list = el("ol");
+    var fileShown = false;
     CASE.outline.forEach(function (o) {
-      var i = stageIndex(o.id);
-      var done = !!state.completed[o.id];
-      var status;
+      if (FILE_STEP && !fileShown && o.number > FILE_STEP) {
+        list.appendChild(el("li", null, [fileButton(String(FILE_STEP))]));
+        fileShown = true;
+      }
+      var i = sectionIndex(o.id);
       var node;
-      var label = [el("span", { className: "num", text: String(o.number), "aria-hidden": "true" })];
       if (i === -1) {
-        status = o.part && PART && o.partOrder < PART.order ? "Completed in " + o.partLabel : o.partLabel + ": opens with a new code";
-        label.push(el("span", null, ["Stage " + o.number + ": " + o.title, el("span", { className: "status", text: status })]));
-        node = el("div", { className: "step locked" }, label);
+        var status = PART && o.partOrder < PART.order ? "Done in " + o.partLabel : o.partLabel + ": opens with a new code";
+        node = el("div", { className: "step locked" }, [
+          el("span", { className: "num", text: String(o.number), "aria-hidden": "true" }),
+          el("span", null, [o.title, el("span", { className: "status", text: status })]),
+        ]);
       } else {
-        var current = view === o.id;
-        var open = canOpen(i);
-        status = current ? "Current stage" : done ? "Completed" : open ? "Available" : "Not started";
-        label.push(el("span", null, ["Stage " + o.number + ": " + o.title, el("span", { className: "status", text: status })]));
-        if (open) {
-          node = el(
-            "button",
-            {
-              type: "button",
-              className: "step" + (done ? " done" : ""),
-              "aria-current": current ? "step" : null,
-              onclick: function () {
-                go(o.id);
-              },
-            },
-            label
-          );
-        } else {
-          node = el("div", { className: "step locked" + (done ? " done" : "") }, label);
-        }
+        var st = sectionStatus(SECTIONS[i]);
+        node = navButton("ws:" + o.id, String(o.number), o.title, st, view === "ws:" + o.id, st === "Complete" ? "done" : null);
       }
       list.appendChild(el("li", null, [node]));
     });
-    nav.appendChild(el("h2", { text: "Consultation stages" }));
+    if (FILE_STEP && !fileShown) list.appendChild(el("li", null, [fileButton(String(FILE_STEP))]));
     nav.appendChild(list);
+
+    var missing = allMissing().length;
+    var reportTitle = PART && !PART.last ? "Save your " + PART.label + " record" : "Report";
+    nav.appendChild(
+      el("ul", { className: "nav-report" }, [
+        el("li", null, [
+          navButton(
+            "report",
+            "•",
+            reportTitle,
+            missing ? missing + " required " + (missing === 1 ? "answer" : "answers") + " missing" : "Ready to download",
+            view === "report"
+          ),
+        ]),
+      ])
+    );
     nav.appendChild(
       el("p", {
         className: "save-note",
@@ -273,9 +530,185 @@
     );
   }
 
-  // ---------- Blocks ----------
+  // ---------- Case file ----------
 
-  function renderBlock(block, stage) {
+  function tile(id) {
+    var it = ITEMS[id];
+    var read = !!state.opened[id];
+    var meta = kind(it.kind).label + (it.role ? " · " + it.role : "");
+    return el("li", null, [
+      el(
+        "button",
+        {
+          type: "button",
+          className: "tile tile-" + it.kind + (read ? " read" : ""),
+          onclick: function () {
+            go("item:" + id);
+          },
+        },
+        [
+          el("span", { className: "tile-num", text: "No. " + it.number, "aria-hidden": "true" }),
+          el("span", { className: "tile-body" }, [
+            el("span", { className: "tile-kind", text: meta }),
+            el("span", { className: "tile-title" }, [el("span", { className: "visually-hidden", text: "Item " + it.number + ": " }), it.title]),
+            it.summary ? el("span", { className: "tile-summary", text: it.summary }) : null,
+            el("span", { className: "tile-status" }, [
+              it.isNew ? el("span", { className: "tag new", text: "New" }) : null,
+              el("span", { text: read ? "Opened" : "Not opened yet" }),
+            ]),
+          ]),
+        ]
+      ),
+    ]);
+  }
+
+  function tileList(ids) {
+    return el("ul", { className: "tiles" }, ids.map(tile));
+  }
+
+  function renderFile() {
+    var cf = CASE.caseFile || {};
+    main.appendChild(el("p", { className: "stage-label", text: FILE_STEP ? "Step " + FILE_STEP + " of " + STEP_COUNT : "Case file" }));
+    main.appendChild(el("h2", { text: cf.heading || "Case file" }));
+    paragraphs(cf.intro || ["Open any item, in any order. Nothing here is required reading, but your recommendation should rest on what you find."], "lead").forEach(function (n) {
+      main.appendChild(n);
+    });
+    var fresh = ITEM_ORDER.filter(function (id) {
+      return ITEMS[id].isNew;
+    });
+    if (fresh.length) {
+      main.appendChild(el("h3", { text: "New in " + (PART ? PART.label : "this part") }));
+      main.appendChild(tileList(fresh));
+    }
+    KINDS.forEach(function (k) {
+      var ids = ITEM_ORDER.filter(function (id) {
+        return ITEMS[id].kind === k.id && !ITEMS[id].isNew;
+      });
+      if (!ids.length) return;
+      main.appendChild(el("h3", { text: (fresh.length ? "Earlier: " : "") + k.heading }));
+      main.appendChild(tileList(ids));
+    });
+    main.appendChild(
+      el("div", { className: "actions" }, [
+        returnButton("btn") ||
+          el("button", {
+            type: "button",
+            className: "btn",
+            text: "Go to the worksheet",
+            onclick: function () {
+              go("ws:" + firstOpenSection().id);
+            },
+          }),
+      ])
+    );
+  }
+
+  function firstOpenSection() {
+    for (var i = 0; i < SECTIONS.length; i++) if (sectionStatus(SECTIONS[i]) !== "Complete") return SECTIONS[i];
+    return SECTIONS[0];
+  }
+
+  function initials(name) {
+    return name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(function (w) {
+        return w.charAt(0).toUpperCase();
+      })
+      .join("");
+  }
+
+  // Label/value rows. On a chart they read as the fields at the top of a record.
+  function chartFields(rows) {
+    return el(
+      "dl",
+      { className: "chart-fields" },
+      rows.map(function (r) {
+        return el("div", null, [el("dt", { text: r[0] }), el("dd", { text: r[1] })]);
+      })
+    );
+  }
+
+  function renderItem(id) {
+    var it = ITEMS[id];
+    var k = kind(it.kind);
+    var look = LOOKS[it.look] ? it.look : k.look;
+    main.appendChild(el("p", { className: "stage-label", text: "Case file · Item " + it.number + " · " + k.label + (it.isNew ? " · New" : "") }));
+
+    var head = el("header", { className: "sheet-head" }, [
+      el("p", { className: "sheet-band" }, [el("span", { text: it.bandLabel || (look === k.look && k.band) || LOOKS[look] }), el("span", { text: "Item " + it.number })]),
+    ]);
+    var titleRow = el("div", { className: "sheet-title" }, [
+      it.kind === "person" ? el("span", { className: "avatar", text: initials(it.title), "aria-hidden": "true" }) : null,
+      el("div", null, [el("h2", { text: it.title }), it.role ? el("p", { className: "role", text: it.role }) : null, it.source ? el("p", { className: "source", text: it.source }) : null]),
+    ]);
+    head.appendChild(titleRow);
+    if (it.kind === "background") {
+      head.appendChild(el("p", { className: "sheet-note", text: "Plain-language background to help you follow the case. It is simplified, and it is not medical advice." }));
+    }
+
+    var body = el("div", { className: "sheet-body" });
+    paragraphs(it.introduction, "lead").forEach(function (n) {
+      body.appendChild(n);
+    });
+    (it.sections || []).forEach(function (sec) {
+      var nodes = [sec.heading ? el("h3", { text: sec.heading }) : null].concat(paragraphs(sec.paragraphs));
+      if (sec.items) nodes.push(bullets(sec.items));
+      if (sec.rows) nodes.push(look === "chart" ? chartFields(sec.rows) : recordTable(sec.rows));
+      if (sec.quote) nodes.push(el("blockquote", null, paragraphs(sec.quote).concat(sec.quoteSource ? [el("p", { className: "source", text: sec.quoteSource })] : [])));
+      body.appendChild(el("section", null, nodes));
+    });
+    if (it.questions && it.questions.length) {
+      body.appendChild(el("h3", { text: it.questionsHeading || "Questions you can ask" }));
+      body.appendChild(
+        el(
+          "div",
+          { className: "transcript" },
+          it.questions.map(function (q) {
+            return disclosure(q.question, paragraphs(q.answer), "h4");
+          })
+        )
+      );
+    }
+    if (it.limits) {
+      body.appendChild(el("div", { className: "callout attention" }, [el("p", { className: "callout-label", text: "What this can’t tell you" })].concat(paragraphs(it.limits))));
+    }
+    main.appendChild(el("article", { className: "sheet sheet-" + look }, [head, body]));
+    if (PROMPTS["notes." + id]) main.appendChild(el("div", { className: "notepad" }, [renderPrompt("notes." + id)]));
+
+    var pos = ITEM_ORDER.indexOf(id);
+    var nextId = ITEM_ORDER[pos + 1];
+    var back = returnButton("btn");
+    var buttons = [
+      back,
+      el("button", {
+        type: "button",
+        className: back ? "btn secondary" : "btn",
+        text: "Back to the case file",
+        onclick: function () {
+          go("file");
+        },
+      }),
+    ];
+    if (nextId) {
+      buttons.push(
+        el("button", {
+          type: "button",
+          className: "btn secondary",
+          text: "Next item: " + ITEMS[nextId].number + ". " + ITEMS[nextId].title,
+          onclick: function () {
+            go("item:" + nextId);
+          },
+        })
+      );
+    }
+    main.appendChild(el("div", { className: "actions" }, buttons));
+  }
+
+  // ---------- Worksheet blocks ----------
+
+  function renderBlock(block) {
     switch (block.type) {
       case "text":
         return el("section", null, [block.heading ? el("h3", { text: block.heading }) : null].concat(paragraphs(block.paragraphs)));
@@ -286,40 +719,18 @@
           [block.label ? el("p", { className: "callout-label", text: block.label }) : null].concat(paragraphs(block.paragraphs))
         );
       case "list":
-        return el("section", null, [
-          block.heading ? el("h3", { text: block.heading }) : null,
-          block.intro ? el("p", { text: block.intro }) : null,
-          el(
-            block.ordered ? "ol" : "ul",
-            null,
-            block.items.map(function (t) {
-              return el("li", { text: t });
-            })
-          ),
-        ]);
+        return el("section", null, [block.heading ? el("h3", { text: block.heading }) : null, block.intro ? el("p", { text: block.intro }) : null, el(block.ordered ? "ol" : "ul", null, block.items.map(function (t) {
+          return el("li", { text: t });
+        }))]);
       case "quote":
         return el("section", null, [
           block.heading ? el("h3", { text: block.heading }) : null,
           el("blockquote", null, paragraphs(block.paragraphs).concat(block.source ? [el("p", { className: "source", text: block.source })] : [])),
         ]);
       case "record":
-        return el("section", null, [
-          block.heading ? el("h3", { text: block.heading }) : null,
-          block.intro ? el("p", { text: block.intro }) : null,
-          el("table", { className: "record" }, [
-            el(
-              "tbody",
-              null,
-              block.rows.map(function (r) {
-                return el("tr", null, [el("th", { scope: "row", text: r[0] }), el("td", { text: r[1] })]);
-              })
-            ),
-          ]),
-        ]);
-      case "stakeholders":
-        return renderStakeholders(block);
-      case "evidence":
-        return renderEvidence(block);
+        return el("section", null, [block.heading ? el("h3", { text: block.heading }) : null, block.intro ? el("p", { text: block.intro }) : null, recordTable(block.rows)]);
+      case "items":
+        return el("section", null, [block.heading ? el("h3", { text: block.heading }) : null, block.intro ? el("p", { text: block.intro }) : null, tileList(block.ids)]);
       case "concepts":
         return el("section", null, [
           el("h3", { text: block.heading }),
@@ -328,7 +739,7 @@
             "div",
             null,
             block.items.map(function (c) {
-              return disclosure(c.title, paragraphs(c.paragraphs), null, "h4");
+              return disclosure(c.title, paragraphs(c.paragraphs), "h4");
             })
           ),
         ]);
@@ -347,67 +758,16 @@
       case "trajectory":
         return renderTrajectory(block);
       case "perspectives":
-        return renderPerspectives(block);
-      case "report":
-        return renderReportBlock(block);
+        return trackPerspectives(block);
+      case "options":
+        return renderOptions(block);
+      case "optionFields":
+        return renderOptionFields(block);
+      case "consultNote":
+        return renderConsultNote(block);
       default:
         return null;
     }
-  }
-
-  function renderStakeholders(block) {
-    var cards = block.ids.map(function (sid) {
-      var s = CASE.stakeholders[sid];
-      var tag = el("span", { className: "tag " + (state.visited[sid] ? "done" : "todo"), text: state.visited[sid] ? "Interviewed" : "Not yet interviewed" });
-      var noteId = "notes." + sid;
-      var questions = s.questions.map(function (q) {
-        return disclosure(q.question, paragraphs(q.answer), function () {
-          if (!state.visited[sid]) {
-            state.visited[sid] = true;
-            save();
-            tag.className = "tag done";
-            tag.textContent = "Interviewed";
-            renderNav();
-          }
-        });
-      });
-      return el("article", { className: "card", id: "stakeholder-" + sid, tabindex: "-1" }, [
-        el("h4", null, [s.name, tag]),
-        el("p", { className: "role", text: s.role }),
-      ]
-        .concat(paragraphs(s.introduction))
-        .concat(questions)
-        .concat(PROMPTS[noteId] ? [renderPrompt(noteId)] : []));
-    });
-    return el("section", null, [block.heading ? el("h3", { text: block.heading }) : null, block.intro ? el("p", { text: block.intro }) : null, el("div", { className: "cards" }, cards)]);
-  }
-
-  function renderEvidence(block) {
-    return el(
-      "section",
-      null,
-      [block.heading ? el("h3", { text: block.heading }) : null].concat(
-        block.ids.map(function (eid) {
-          var e = CASE.evidence[eid];
-          state.visited["evidence:" + eid] = true;
-          var parts = [el("h4", { text: e.title }), el("p", { className: "source", text: e.source })].concat(paragraphs(e.content));
-          if (e.points) {
-            parts.push(
-              el(
-                "ul",
-                null,
-                e.points.map(function (t) {
-                  return el("li", { text: t });
-                })
-              )
-            );
-          }
-          parts = parts.concat(paragraphs(e.after));
-          if (e.limits) parts.push(el("div", { className: "callout attention" }, [el("p", { className: "callout-label", text: "Limits of this evidence" })].concat(paragraphs(e.limits))));
-          return el("article", { className: "card evidence-card" }, parts);
-        })
-      )
-    );
   }
 
   function describeAnswer(id) {
@@ -418,6 +778,7 @@
       var opt = optionById(p, v);
       return opt ? opt.title : v;
     }
+    if (p.type === "listChoice") return optionName(p.list, v) || "[An option that was later removed or left unnamed]";
     return v;
   }
 
@@ -469,45 +830,251 @@
     var p = PROMPTS[block.prompt];
     var chosen = value(block.prompt);
     var opts = CASE.optionSets[p.options];
-    var nodes = [el("h3", { text: block.heading })].concat(paragraphs(block.intro));
-    function body(opt) {
-      var v = CASE.perspectives[opt.id];
-      if (!v) return [el("p", { text: "No notes for this option." })];
-      return [
-        el("h5", { text: "What it takes seriously" }),
-        el(
-          "ul",
-          null,
-          v.addresses.map(function (t) {
-            return el("li", { text: t });
-          })
-        ),
-        el("h5", { text: "What it leaves open or costs" }),
-        el(
-          "ul",
-          null,
-          v.leavesOpen.map(function (t) {
-            return el("li", { text: t });
-          })
-        ),
-      ];
-    }
+    var nodes = [el("h3", { text: block.heading })];
     var mine = optionById(p, chosen);
-    if (mine) {
-      nodes.push(el("div", { className: "card" }, [el("h4", { text: "Your recommendation: " + mine.title })].concat(body(mine))));
+    // Shown only after the student commits, so the comparison can't anchor the choice.
+    if (!mine) {
+      var where = sectionWithPrompt(block.prompt);
+      nodes.push(
+        el("div", { className: "callout" }, [
+          el("p", {
+            text:
+              "This comparison opens after you choose your recommendation" +
+              (where ? " in “" + where.title + "”." : "."),
+          }),
+        ])
+      );
+      return el("section", null, nodes);
     }
-    nodes.push(el("h4", { text: mine ? "The other options" : "The options" }));
+    nodes = nodes.concat(paragraphs(block.intro));
+    var body = perspectiveBody;
+    nodes.push(el("div", { className: "card" }, [el("h4", { text: "Your recommendation: " + mine.title })].concat(body(mine))));
+    nodes.push(el("h4", { text: "The other options" }));
     opts.forEach(function (opt) {
-      if (mine && opt.id === mine.id) return;
+      if (opt.id === mine.id) return;
       nodes.push(disclosure(opt.title, body(opt)));
     });
     return el("section", null, nodes);
   }
 
+  // Comparisons on the page, so they can open as soon as the student chooses.
+  var shownPerspectives = [];
+
+  function trackPerspectives(block) {
+    var node = block.after ? renderOtherOptions(block) : renderPerspectives(block);
+    shownPerspectives.push({ block: block, node: node });
+    return node;
+  }
+
+  function refreshPerspectives(promptId) {
+    shownPerspectives.forEach(function (entry) {
+      if ((entry.block.after || entry.block.prompt) !== promptId) return;
+      var fresh = entry.block.after ? renderOtherOptions(entry.block) : renderPerspectives(entry.block);
+      entry.node.replaceWith(fresh);
+      entry.node = fresh;
+    });
+  }
+
+  function perspectiveBody(opt) {
+    var v = CASE.perspectives[opt.id];
+    if (!v) return [el("p", { text: "No notes for this option." })];
+    return [el("h5", { text: "What it takes seriously" }), bullets(v.addresses), el("h5", { text: "What it leaves open or costs" }), bullets(v.leavesOpen)];
+  }
+
+  // The case's own options, shown only after students choose from their own list,
+  // so they can't anchor which options students identify.
+  function renderOtherOptions(block) {
+    var nodes = [el("h3", { text: block.heading })];
+    if (!value(block.after)) {
+      var where = sectionWithPrompt(block.after);
+      nodes.push(el("div", { className: "callout" }, [el("p", { text: "These open after you choose your course of action" + (where ? " in “" + where.title + "”." : ".") })]));
+      return el("section", null, nodes);
+    }
+    nodes = nodes.concat(paragraphs(block.intro));
+    (CASE.optionSets[block.options] || []).forEach(function (opt) {
+      nodes.push(disclosure(opt.title, (opt.description ? [el("p", { text: opt.description })] : []).concat(perspectiveBody(opt))));
+    });
+    return el("section", null, nodes);
+  }
+
+  function renderOptions(block) {
+    var ids = listIds(block.id);
+    var min = block.min || 2;
+    var max = block.max || 6;
+    var nodes = [block.heading ? el("h3", { text: block.heading }) : null].concat(paragraphs(block.intro));
+    ids.forEach(function (uid, n) {
+      var parts = [el("legend", { text: "Option " + (n + 1) }), renderPrompt(block.id + "." + uid + ".name")];
+      (block.fields || []).forEach(function (f) {
+        parts.push(renderPrompt(block.id + "." + uid + "." + f.key));
+      });
+      if (ids.length > min) {
+        parts.push(
+          el("button", {
+            type: "button",
+            className: "link-button remove-option",
+            text: "Remove option " + (n + 1),
+            onclick: function () {
+              removeOption(block, uid, n);
+            },
+          })
+        );
+      }
+      nodes.push(el("fieldset", { className: "option-card", id: "card-" + uid }, parts));
+    });
+    if (ids.length < max) {
+      nodes.push(
+        el("button", {
+          type: "button",
+          className: "btn secondary add-option",
+          text: block.addLabel || "Add another option",
+          onclick: function () {
+            addOption(block);
+          },
+        })
+      );
+    } else {
+      nodes.push(el("p", { className: "muted", text: "You can list up to " + max + " options." }));
+    }
+    return el("section", { className: "options-block" }, nodes);
+  }
+
+  // More fields for each option listed in an earlier section (for example, arguments
+  // for and against in the step after options and consequences).
+  function renderOptionFields(block) {
+    var nodes = [block.heading ? el("h3", { text: block.heading }) : null].concat(paragraphs(block.intro));
+    var named = namedOptions(block.list);
+    var home = OPTION_BLOCKS[block.list] && OPTION_BLOCKS[block.list].section;
+    if (!named.length) {
+      nodes.push(
+        el("div", { className: "callout attention" }, [
+          el("p", { text: "This step works from the options you list" + (home ? " in “" + home.title + "”" : "") + ". Name at least one option there first." }),
+          home
+            ? el("button", {
+                type: "button",
+                className: "link-button",
+                text: "Go to " + home.title,
+                onclick: function () {
+                  go("ws:" + home.id);
+                },
+              })
+            : null,
+        ])
+      );
+    }
+    named.forEach(function (uid) {
+      var parts = [el("legend", { text: optionName(block.list, uid) })];
+      block.fields.forEach(function (f) {
+        parts.push(renderPrompt(block.list + "." + uid + "." + f.key));
+      });
+      nodes.push(el("fieldset", { className: "option-card" }, parts));
+    });
+    return el("section", null, nodes);
+  }
+
+  // The note the committee leaves in the chart for the clinician who asked. A word
+  // count guides its length but never blocks the student.
+  function noteFrom(block) {
+    var team = value("team.name").trim();
+    return (block.from || "Clinical Ethics Committee") + (team ? " · " + team : "");
+  }
+
+  function renderConsultNote(block) {
+    var limit = block.wordLimit || 250;
+    var nodes = [el("h3", { text: block.heading || "Write the consult note" })];
+    paragraphs(
+      block.intro || [
+        "Write the note the committee would leave in the chart for " +
+          (block.to || "the clinician who asked for this consultation") +
+          ". Keep it short and plain: they should be able to act on it in two minutes.",
+      ]
+    ).forEach(function (n) {
+      nodes.push(n);
+    });
+    var counter = el("p", { className: "word-count", id: "note-word-count" });
+    var wasOver = null;
+    function update() {
+      var n = block.ids.reduce(function (sum, id) {
+        var t = value(id).trim();
+        return sum + (t ? t.split(/\s+/).length : 0);
+      }, 0);
+      var over = n > limit;
+      counter.textContent = over
+        ? "Note length: " + n + " words. That is over the " + limit + "-word guide; a busy clinician may not read it all."
+        : "Note length: " + n + (n === 1 ? " word" : " words") + " (aim for " + limit + " or fewer).";
+      counter.className = "word-count" + (over ? " over" : "");
+      if (wasOver !== null && over !== wasOver) announce(over ? "The note is now over " + limit + " words." : "The note is back within " + limit + " words.");
+      wasOver = over;
+    }
+    var head = el("dl", { className: "chart-fields note-head" }, [
+      el("div", null, [el("dt", { text: "To" }), el("dd", { text: block.to || "Requesting clinician" })]),
+      el("div", null, [el("dt", { text: "From" }), el("dd", { text: noteFrom(block) })]),
+      el("div", null, [el("dt", { text: "Re" }), el("dd", { text: block.re })]),
+      el("div", null, [el("dt", { text: "Date" }), el("dd", { text: new Date().toLocaleDateString() })]),
+    ]);
+    var body = el("div", { className: "consult-note-body" }, [head]);
+    block.ids.forEach(function (id) {
+      body.appendChild(renderPrompt(id));
+    });
+    body.appendChild(counter);
+    var note = el("section", { className: "consult-note", "aria-label": "Ethics consultation note" }, [
+      el("p", { className: "sheet-band" }, [el("span", { text: "Ethics consultation note" }), el("span", { text: "For the chart" })]),
+      body,
+    ]);
+    note.addEventListener("input", update);
+    update();
+    nodes.push(note);
+    return el("section", null, nodes);
+  }
+
+  function addOption(block) {
+    var uid = newUid();
+    state.lists[block.id] = listIds(block.id).concat([uid]);
+    syncOptionPrompts();
+    save();
+    render();
+    var input = document.getElementById(domId(block.id + "." + uid + ".name"));
+    if (input) {
+      input.focus();
+      input.scrollIntoView({ block: "center" });
+    }
+    announce("Option " + listIds(block.id).length + " added.");
+  }
+
+  function removeOption(block, uid, n) {
+    var keys = ["name"].concat(
+      (block.allFields || block.fields || []).map(function (f) {
+        return f.key;
+      })
+    );
+    var written = keys.some(function (k) {
+      return value(block.id + "." + uid + "." + k).trim();
+    });
+    var name = optionName(block.id, uid);
+    if (written && !window.confirm("Remove option " + (n + 1) + (name ? " (“" + name + "”)" : "") + " and everything written for it? This cannot be undone.")) return;
+    keys.forEach(function (k) {
+      delete state.responses[block.id + "." + uid + "." + k];
+      delete PROMPTS[block.id + "." + uid + "." + k];
+    });
+    state.lists[block.id] = listIds(block.id).filter(function (x) {
+      return x !== uid;
+    });
+    // A choice of the removed option no longer stands.
+    Object.keys(PROMPTS).forEach(function (pid) {
+      var p = PROMPTS[pid];
+      if (p.type === "listChoice" && p.list === block.id && value(pid) === uid) delete state.responses[pid];
+    });
+    syncOptionPrompts();
+    save();
+    render();
+    var add = main.querySelector(".add-option");
+    if (add) add.focus();
+    announce("Option removed.");
+  }
+
   // ---------- Prompts ----------
 
   function fieldError(field, message) {
-    var errId = field.getAttribute("data-prompt") + "-error";
+    var errId = domId(field.getAttribute("data-prompt")) + "-error";
     var existing = document.getElementById(errId);
     if (message) {
       field.classList.add("invalid");
@@ -525,7 +1092,7 @@
     if (input) {
       var described = [];
       if (message) described.push(errId);
-      if (field.querySelector(".help")) described.push(field.getAttribute("data-prompt") + "-help");
+      if (field.querySelector(".help")) described.push(domId(field.getAttribute("data-prompt")) + "-help");
       if (described.length) input.setAttribute("aria-describedby", described.join(" "));
       else input.removeAttribute("aria-describedby");
       if (input.tagName !== "FIELDSET") input.setAttribute("aria-invalid", message ? "true" : "false");
@@ -542,7 +1109,7 @@
     var fid = domId(id);
     var reqText = p.required ? " (required)" : p.requiredIf ? "" : " (optional)";
     var labelText = (restating && p.restateLabel) || p.label;
-    var help = p.help ? el("p", { className: "help", id: id + "-help", text: p.help }) : null;
+    var help = p.help ? el("p", { className: "help", id: fid + "-help", text: p.help }) : null;
     var field = el("div", { className: "field", "data-prompt": id });
 
     function onChange(v) {
@@ -550,10 +1117,54 @@
       if (restating) state.restated[id] = true;
       save();
       if (field.classList.contains("invalid") && v.trim()) fieldError(field, null);
-      if (p.type === "choice") refreshDependents(id);
+      if (p.type === "choice" || p.type === "listChoice") {
+        refreshDependents(id);
+        refreshPerspectives(id);
+      }
+      renderNav();
     }
 
-    if (p.type === "choice") {
+    if (p.type === "listChoice") {
+      var lfs = el("fieldset", { id: fid, tabindex: "-1" }, [el("legend", null, [labelText, el("span", { className: "req", text: reqText })]), help]);
+      var named = namedOptions(p.list);
+      var home = OPTION_BLOCKS[p.list] && OPTION_BLOCKS[p.list].section;
+      if (!named.length) {
+        lfs.appendChild(
+          el("div", { className: "callout attention" }, [
+            el("p", { text: "Your choice is made from the options you list" + (home ? " in “" + home.title + "”" : "") + ". Name at least one option there first." }),
+            home
+              ? el("button", {
+                  type: "button",
+                  className: "link-button",
+                  text: "Go to " + home.title,
+                  onclick: function () {
+                    go("ws:" + home.id);
+                  },
+                })
+              : null,
+          ])
+        );
+      }
+      named.forEach(function (uid) {
+        var inputId = fid + "-" + uid;
+        lfs.appendChild(
+          el("label", { className: "option", for: inputId }, [
+            el("input", {
+              type: "radio",
+              name: fid,
+              id: inputId,
+              value: uid,
+              checked: value(id) === uid,
+              onchange: function () {
+                onChange(uid);
+              },
+            }),
+            el("span", null, [el("span", { className: "opt-title", text: optionName(p.list, uid) })]),
+          ])
+        );
+      });
+      field.appendChild(lfs);
+    } else if (p.type === "choice") {
       var fs = el("fieldset", { id: fid, tabindex: "-1" }, [el("legend", null, [labelText, el("span", { className: "req", text: reqText })]), help]);
       CASE.optionSets[p.options].forEach(function (opt) {
         var inputId = fid + "-" + opt.id;
@@ -576,10 +1187,7 @@
       });
       field.appendChild(fs);
     } else {
-      var input2 =
-        p.type === "text"
-          ? el("input", { type: "text", id: fid, autocomplete: "off" })
-          : el("textarea", { id: fid, rows: String(p.rows || 5) });
+      var input2 = p.type === "text" ? el("input", { type: "text", id: fid, autocomplete: "off" }) : el("textarea", { id: fid, rows: String(p.rows || 5) });
       input2.value = value(id);
       input2.addEventListener("input", function () {
         onChange(input2.value);
@@ -591,10 +1199,11 @@
     if (p.requiredIf) {
       field.setAttribute("data-depends", p.requiredIf.prompt);
       field.hidden = !isRequired(p) && !value(id);
+      markCondition(field, p);
     }
     if (help) {
       var target = field.querySelector("textarea, input[type=text], fieldset");
-      target.setAttribute("aria-describedby", id + "-help");
+      target.setAttribute("aria-describedby", fid + "-help");
     }
     return field;
   }
@@ -605,56 +1214,24 @@
       var p = PROMPTS[deps[i].getAttribute("data-prompt")];
       deps[i].hidden = !isRequired(p) && !value(p.id);
       if (deps[i].hidden) fieldError(deps[i], null);
+      markCondition(deps[i], p);
     }
   }
 
-  function showProblems(list) {
-    var old = main.querySelector(".error-summary");
+  // A conditional answer stays on screen after its choice changes, so nothing written is
+  // lost, but it is left out of the report and says so.
+  function markCondition(field, p) {
+    var old = field.querySelector(".field-note");
     if (old) old.remove();
-    var fields = main.querySelectorAll(".field[data-prompt]");
-    for (var i = 0; i < fields.length; i++) fieldError(fields[i], null);
-    if (!list.length) return;
-    var summary = el("div", { className: "error-summary", tabindex: "-1", role: "group", "aria-labelledby": "error-summary-title" }, [
-      el("h3", { id: "error-summary-title", text: "Before you continue, complete " + (list.length === 1 ? "this item" : "these " + list.length + " items") + ":" }),
-      el(
-        "ul",
-        null,
-        list.map(function (pr) {
-          return el("li", null, [
-            el("button", {
-              type: "button",
-              className: "link-button",
-              text: pr.message,
-              onclick: function () {
-                var target = document.getElementById(PROMPTS[pr.id] ? domId(pr.id) : pr.id);
-                if (target) {
-                  if (target.tagName === "FIELDSET") {
-                    var first = target.querySelector("input");
-                    (first || target).focus();
-                  } else target.focus();
-                  target.scrollIntoView({ block: "center" });
-                }
-              },
-            }),
-          ]);
-        })
-      ),
-    ]);
-    list.forEach(function (pr) {
-      var f = main.querySelector('.field[data-prompt="' + pr.id + '"]');
-      if (f) {
-        f.hidden = false;
-        fieldError(f, PROMPTS[pr.id].errorText || (PROMPTS[pr.id].type === "choice" ? "Choose an option." : "Write a response before you continue."));
-      }
-    });
-    main.insertBefore(summary, stageActions());
-    summary.focus();
-    announce("Some required items are missing.");
-  }
-
-  function stageActions() {
-    var all = main.querySelectorAll(":scope > .actions");
-    return all[all.length - 1];
+    if (isRequired(p) || !value(p.id)) return;
+    var src = PROMPTS[p.requiredIf.prompt];
+    var opt = src && src.type === "choice" ? optionById(src, p.requiredIf.equals) : null;
+    field.appendChild(
+      el("p", {
+        className: "field-note",
+        text: "Left out of your report unless you choose “" + (opt ? opt.title : p.requiredIf.equals) + "”. Delete it if you no longer need it.",
+      })
+    );
   }
 
   // ---------- Report ----------
@@ -662,17 +1239,28 @@
   function reportModel(config) {
     // Answers from an earlier part are missing as a whole when that part was done on another device.
     var haveEarlier = config.sections.some(function (sec) {
-      return sec.earlier && sec.ids.some(function (id) {
-        return PROMPTS[id] && value(id);
-      });
+      return (
+        sec.earlier &&
+        (sec.ids || []).some(function (id) {
+          return PROMPTS[id] && value(id);
+        })
+      );
     });
     var sections = config.sections.map(function (sec) {
+      // A consult note opens with its addressing lines.
+      var head = sec.note
+        ? [
+            { label: "To", answer: sec.note.to || "Requesting clinician", note: null, missing: "" },
+            { label: "From", answer: noteFrom(sec.note), note: null, missing: "" },
+            { label: "Re", answer: sec.note.re || CASE.title, note: null, missing: "" },
+          ]
+        : [];
       return {
         title: sec.title,
-        items: sec.ids
+        items: head.concat((sec.ids || [])
           .filter(function (id) {
-            // Skip conditional prompts that did not apply.
-            return PROMPTS[id] && (value(id) || !PROMPTS[id].requiredIf || isRequired(PROMPTS[id]));
+            // Skip conditional prompts that do not apply, even if they still hold text.
+            return PROMPTS[id] && (!PROMPTS[id].requiredIf || isRequired(PROMPTS[id]));
           })
           .map(function (id) {
             var p = PROMPTS[id];
@@ -682,9 +1270,18 @@
               note: state.restated[id] ? "Restated at the start of " + (PART ? PART.label : "this part") + " because the earlier answer was not on this device." : null,
               missing: sec.earlier && !haveEarlier ? "[Not on this device. See your record from the earlier part.]" : "[No response]",
             };
-          }),
+          })
+          .concat(listItems(sec.lists || []))),
       };
     });
+    sections = sections.concat(otherSections(config));
+    // Case-file notes are optional, so only the ones written appear.
+    var notes = ITEM_ORDER.filter(function (id) {
+      return PROMPTS["notes." + id] && value("notes." + id).trim();
+    }).map(function (id) {
+      return { label: PROMPTS["notes." + id].shortLabel, answer: value("notes." + id), note: null, missing: "" };
+    });
+    if (notes.length) sections.push({ title: "Notes from the case file", items: notes });
     return {
       title: config.title,
       caseTitle: CASE.title,
@@ -693,8 +1290,73 @@
       team: value("team.name"),
       members: value("team.members"),
       date: new Date().toLocaleString(),
+      missingCount: allMissing().length,
       sections: sections,
     };
+  }
+
+  // Answers this file holds that the report outline doesn't list, so a report or an
+  // export never leaves out work a student has done.
+  function otherSections(config) {
+    var seen = {};
+    config.sections.forEach(function (sec) {
+      (sec.ids || []).forEach(function (id) {
+        seen[id] = true;
+      });
+      (sec.lists || []).forEach(function (bid) {
+        seen["list:" + bid] = true;
+      });
+    });
+    function inList(id) {
+      return Object.keys(OPTION_BLOCKS).some(function (bid) {
+        return id.indexOf(bid + ".") === 0;
+      });
+    }
+    var out = [];
+    SECTIONS.forEach(function (s) {
+      var items = [];
+      s.blocks.forEach(function (b) {
+        var bid = b.type === "options" ? b.id : b.type === "optionFields" ? b.list : null;
+        if (!bid || seen["list:" + bid]) return;
+        seen["list:" + bid] = true;
+        items = items.concat(
+          listItems([bid]).filter(function (item) {
+            return item.answer;
+          })
+        );
+      });
+      sectionPrompts(s).forEach(function (id) {
+        var p = PROMPTS[id];
+        if (!p || seen[id] || inList(id) || !value(id).trim() || (p.requiredIf && !isRequired(p))) return;
+        seen[id] = true;
+        items.push({ label: p.shortLabel || p.label, answer: describeAnswer(id), note: null, missing: "" });
+      });
+      if (items.length) out.push({ title: "Also recorded: " + (FILE_STEP ? "Step " + outlineNumber(s.id) + ", " : "") + s.title, items: items });
+    });
+    return out;
+  }
+
+  function listItems(blockIds) {
+    var items = [];
+    blockIds.forEach(function (bid) {
+      var b = OPTION_BLOCKS[bid] && OPTION_BLOCKS[bid].block;
+      if (!b) return;
+      var named = namedOptions(bid);
+      if (!named.length) items.push({ label: b.reportLabel || "Options considered", answer: "", note: null, missing: "[No options listed]" });
+      named.forEach(function (uid) {
+        var text = (b.allFields || b.fields || [])
+          .map(function (f) {
+            return f.label + ":\n" + (value(bid + "." + uid + "." + f.key).trim() || "[No response]");
+          })
+          .join("\n\n");
+        items.push({ label: "Option: " + optionName(bid, uid), answer: text, note: null, missing: "" });
+      });
+    });
+    return items;
+  }
+
+  function incompleteText(model) {
+    return model.missingCount ? "Incomplete: " + model.missingCount + " required " + (model.missingCount === 1 ? "answer was" : "answers were") + " missing when this was saved." : null;
   }
 
   function renderReportInto(container, model) {
@@ -711,6 +1373,7 @@
       el("dd", { text: model.date }),
     ]);
     container.appendChild(meta);
+    if (incompleteText(model)) container.appendChild(el("p", { className: "answer missing", text: incompleteText(model) }));
     model.sections.forEach(function (sec) {
       container.appendChild(el("h3", { text: sec.title }));
       sec.items.forEach(function (item) {
@@ -722,28 +1385,26 @@
   }
 
   function escapeHTML(s) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
   function reportDocument(model) {
     var out = [];
-    out.push("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+    out.push('<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">');
     out.push("<title>" + escapeHTML(model.title + ": " + model.caseTitle) + "</title>");
     out.push(
       "<style>body{font-family:system-ui,'Segoe UI',Arial,sans-serif;line-height:1.5;color:#17212b;max-width:46rem;margin:2rem auto;padding:0 1rem}" +
-        "h1{font-size:1.5rem}h2{font-size:1.2rem;margin-top:2rem;border-bottom:1px solid #d1d8e0;padding-bottom:4px}h3{font-size:1rem;margin:1.25rem 0 .25rem}" +
-        ".answer{white-space:pre-wrap;margin:0}.missing{font-style:italic;color:#7a4b00}.note{color:#4b5563;font-size:.9rem;margin:0}dt{font-weight:600}dd{margin:0 0 .5rem}</style>\n</head>\n<body>"
+        ".letterhead{border-top:6px solid #10384c;border-bottom:2px solid #10384c;padding:12px 0;margin-bottom:16px}.letterhead p{margin:0;font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:#0f6e6e;font-weight:700}" +
+        "h1{font-size:1.5rem;margin:4px 0 0}h2{font-size:.9rem;letter-spacing:.08em;text-transform:uppercase;color:#10384c;margin-top:2rem;border-bottom:1px solid #b9cfd8;padding-bottom:4px}h3{font-size:1rem;margin:1.25rem 0 .25rem}" +
+        "dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;background:#eef4f6;padding:12px 16px;border-radius:4px}dt{font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:#10384c}dd{margin:0}" +
+        ".answer{white-space:pre-wrap;margin:0}.missing{font-style:italic;color:#7a4b00}.note{color:#4b5563;font-size:.9rem;margin:0}</style>\n</head>\n<body>"
     );
-    out.push("<h1>" + escapeHTML(model.title) + "</h1>");
+    out.push('<header class="letterhead"><p>ETHOS · Clinical Ethics Committee</p><h1>' + escapeHTML(model.title) + "</h1></header>");
     out.push("<dl><dt>Case</dt><dd>" + escapeHTML(model.caseTitle + " (version " + model.version + ")" + (model.part ? ", " + model.part : "")) + "</dd>");
     out.push("<dt>Team</dt><dd>" + escapeHTML(model.team || "Not given") + "</dd>");
     out.push("<dt>Members</dt><dd>" + escapeHTML(model.members || "Not given") + "</dd>");
     out.push("<dt>Prepared</dt><dd>" + escapeHTML(model.date) + "</dd></dl>");
+    if (incompleteText(model)) out.push('<p class="answer missing">' + escapeHTML(incompleteText(model)) + "</p>");
     model.sections.forEach(function (sec) {
       out.push("<h2>" + escapeHTML(sec.title) + "</h2>");
       sec.items.forEach(function (item) {
@@ -756,14 +1417,51 @@
     return out.join("\n");
   }
 
-  function renderReportBlock(block) {
+  function renderReport() {
     var config = CASE.report;
+    var finalPart = !PART || PART.last;
+    var pe = (PART && PART.end) || {};
+    main.appendChild(el("p", { className: "stage-label", text: finalPart ? "Report" : PART.label + " record" }));
+    main.appendChild(el("h2", { text: finalPart ? config.heading || "Review and download your report" : pe.heading || "Save your " + PART.label + " record" }));
+    paragraphs(finalPart ? config.intro : pe.paragraphs, "lead").forEach(function (n) {
+      main.appendChild(n);
+    });
+
+    var missing = allMissing();
+    if (missing.length) {
+      main.appendChild(
+        el("div", { className: "callout attention" }, [
+          el("p", { className: "callout-label", text: missing.length + " required " + (missing.length === 1 ? "answer is" : "answers are") + " missing" }),
+          el("p", { text: "You can still download your record, but it will show these as missing." }),
+          el(
+            "ul",
+            null,
+            missing.map(function (m) {
+              var p = PROMPTS[m.id];
+              return el("li", null, [
+                el("button", {
+                  type: "button",
+                  className: "link-button",
+                  text: m.section.title + ": " + (p.shortLabel || p.label),
+                  onclick: function () {
+                    goToPrompt(m.section, m.id);
+                  },
+                }),
+              ]);
+            })
+          ),
+        ])
+      );
+    } else {
+      main.appendChild(el("p", { className: "status-message ok", text: "Every required answer is complete." }));
+    }
+
     var wrapper = el("section", { className: "print-target" });
     var nodes = [];
-    nodes.push(el("h3", { text: block.heading || "Review your report" }));
-    if (block.intro) nodes.push(el("p", { text: block.intro }));
-    (block.teamFields || []).forEach(function (id) {
-      nodes.push(renderPrompt(id));
+    nodes.push(el("h3", { text: finalPart ? "Your report" : pe.reportHeading || "Your record" }));
+    if (!finalPart && pe.reportIntro) nodes.push(el("p", { text: pe.reportIntro }));
+    ["team.name", "team.members"].forEach(function (id) {
+      if (PROMPTS[id]) nodes.push(renderPrompt(id));
     });
     var preview = el("div", { className: "report-preview", id: "report-preview", tabindex: "0", role: "region", "aria-label": "Report preview" });
     var status = el("p", { className: "status-message", role: "status" });
@@ -774,19 +1472,11 @@
     var download = el("button", {
       type: "button",
       className: "btn",
-      text: block.downloadLabel || "Download report",
+      text: (!finalPart && pe.downloadLabel) || config.downloadLabel || "Download report",
       onclick: function () {
         refresh();
         try {
-          var blob = new Blob([reportDocument(reportModel(config))], { type: "text/html;charset=utf-8" });
-          var url = URL.createObjectURL(blob);
-          var a = el("a", { href: url, download: config.filename });
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          window.setTimeout(function () {
-            URL.revokeObjectURL(url);
-          }, 1000);
+          saveBlob(new Blob([reportDocument(reportModel(config))], { type: "text/html;charset=utf-8" }), config.filename);
           status.className = "status-message ok";
           status.textContent = "Report downloaded as " + config.filename + ". Check your downloads folder. If nothing downloaded, use Print or save as PDF.";
         } catch (e) {
@@ -804,8 +1494,7 @@
         window.print();
       },
     });
-    var update = el("button", { type: "button", className: "btn secondary", text: "Refresh preview", onclick: refresh });
-    nodes.push(el("div", { className: "actions" }, [download, print, update]));
+    nodes.push(el("div", { className: "actions" }, [download, print]));
     nodes.push(status);
     nodes.push(preview);
     nodes.forEach(function (n) {
@@ -813,60 +1502,114 @@
     });
     // Keep the preview current when team fields change.
     wrapper.addEventListener("input", refresh);
-    return wrapper;
+    main.appendChild(wrapper);
   }
 
-  // ---------- Views ----------
+  function saveBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = el("a", { href: url, download: filename });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
+  }
+
+  // ---------- Export to Word (header button, on every page) ----------
+
+  var exportStatus = document.getElementById("export-status");
+  var exportTimer = null;
+
+  function exportWord() {
+    var config = CASE.report;
+    var name = config.filename.replace(/\.html?$/i, "") + ".docx";
+    var ok = true;
+    try {
+      saveBlob(window.EthosDocx.build(reportModel(config)), name);
+    } catch (e) {
+      ok = false;
+    }
+    var missing = allMissing().length;
+    var msg = ok
+      ? "Saved " + name + " with everything entered so far" + (missing ? " (" + missing + " required " + (missing === 1 ? "answer" : "answers") + " still to write)" : "") + ". Check your downloads folder."
+      : "The Word export did not work in this browser. Use Download report or Print on the report page instead.";
+    exportStatus.textContent = msg;
+    exportStatus.className = "export-status show" + (ok ? "" : " fail");
+    window.clearTimeout(exportTimer);
+    exportTimer = window.setTimeout(function () {
+      exportStatus.className = "export-status";
+      exportStatus.textContent = "";
+    }, 8000);
+  }
+
+  document.getElementById("export-word").addEventListener("click", exportWord);
+
+  // The header stays on screen; keep the navigation column and scrolled-to fields clear of it.
+  var header = document.querySelector(".case-header");
+  function measureHeader() {
+    document.documentElement.style.setProperty("--header-h", header.offsetHeight + "px");
+  }
+  measureHeader();
+  if (window.ResizeObserver) new ResizeObserver(measureHeader).observe(header);
+  else window.addEventListener("resize", measureHeader);
+
+  // ---------- Page views ----------
 
   function render() {
     var view = currentView();
+    syncOptionPrompts();
+    // Opening an item marks it before the navigation column counts it.
+    if (view.indexOf("item:") === 0 && ITEMS[view.slice(5)] && !state.opened[view.slice(5)]) {
+      state.opened[view.slice(5)] = true;
+      save();
+    }
     main.textContent = "";
+    main.className = "panel view-" + (view.indexOf("item:") === 0 ? "item" : view.indexOf("ws:") === 0 ? "step" : view === "file" || view === "report" ? view : "start");
+    shownPerspectives = [];
     renderNav();
-    if (view === "start") return renderStart();
-    if (view === "part-end") return renderPartEnd();
-    var i = stageIndex(view);
-    if (i === -1 || !canOpen(i)) return renderStart();
-    renderStage(STAGES[i], i);
+    if (view === "file") return renderFile();
+    if (view === "report") return renderReport();
+    if (view.indexOf("item:") === 0 && ITEMS[view.slice(5)]) return renderItem(view.slice(5));
+    if (view.indexOf("ws:") === 0 && sectionIndex(view.slice(3)) !== -1) return renderSection(SECTIONS[sectionIndex(view.slice(3))]);
+    renderStart();
   }
 
   function renderStart() {
     var s = CASE.start;
-    var started = STAGES.some(function (st) {
-      return state.completed[st.id];
-    });
-    var resume = STAGES[0];
-    for (var i = STAGES.length - 1; i >= 0; i--) {
-      if (canOpen(i)) {
-        resume = STAGES[i];
-        break;
-      }
-    }
-    main.appendChild(el("p", { className: "stage-label", text: PART ? PART.label : "Consultation" }));
-    main.appendChild(el("h2", { text: s.heading }));
-    main.appendChild(el("p", { className: "lead", text: s.lead }));
-    var startButtons = [
-      el("button", {
-        type: "button",
-        className: "btn start",
-        text: started ? "Continue where you left off" : s.startLabel,
-        onclick: function () {
-          go(started ? resume.id : STAGES[0].id);
-        },
-      }),
-    ];
-    if (started && resume !== STAGES[0]) {
-      startButtons.push(
+    var resume = state.position[POSITION + ":last"];
+    var jacket = el("div", { className: "jacket" }, [
+      el("p", { className: "jacket-tab", text: PART ? "Case file · " + PART.label : "Case file" }),
+      el("p", { className: "stamp", text: "For committee review" }),
+      el("p", { className: "stage-label", text: PART ? PART.label : "Consultation" }),
+      el("h2", { text: s.heading }),
+      el("p", { className: "lead", text: s.lead }),
+    ]);
+    main.appendChild(jacket);
+    var buttons = [];
+    if (resume) {
+      buttons.push(
         el("button", {
           type: "button",
-          className: "btn secondary",
-          text: "Review from the first stage",
+          className: "btn start",
+          text: "Continue where you left off",
           onclick: function () {
-            go(STAGES[0].id);
+            go(resume);
           },
         })
       );
     }
-    main.appendChild(el("div", { className: "actions start-actions" }, startButtons));
+    buttons.push(
+      el("button", {
+        type: "button",
+        className: resume ? "btn secondary" : "btn start",
+        text: s.startLabel || "Open the case file",
+        onclick: function () {
+          go("file");
+        },
+      })
+    );
+    jacket.appendChild(el("div", { className: "actions start-actions" }, buttons));
     if (versionNotice) {
       main.appendChild(
         el("div", { className: "callout attention" }, [
@@ -875,7 +1618,7 @@
             text:
               "This browser has answers saved from version " +
               versionNotice +
-              " of this case. They have been kept. Check them as you go. To start fresh instead, use \u201cClear my saved answers\u201d at the bottom of the page.",
+              " of this case. They have been kept. Check them as you go. To start fresh instead, use “Clear my saved answers” at the bottom of the page.",
           }),
         ])
       );
@@ -886,110 +1629,47 @@
       paragraphs(sec.paragraphs).forEach(function (n) {
         main.appendChild(n);
       });
-      if (sec.items) {
-        main.appendChild(
-          el(
-            "ul",
-            null,
-            sec.items.map(function (t) {
-              return el("li", { text: t });
-            })
-          )
-        );
-      }
+      if (sec.items) main.appendChild(bullets(sec.items));
     });
     if (!storageOK) {
       main.appendChild(el("div", { className: "callout attention" }, [el("p", { text: "This browser is not saving answers (for example, in some private windows). Work through the case without reloading, and download your record before you close the page." })]));
     }
   }
 
-  function renderStage(stage, i) {
-    main.appendChild(el("p", { className: "stage-label", text: "Stage " + stage.number + " of " + CASE.outline.length }));
-    main.appendChild(el("h2", { text: stage.title }));
-    paragraphs(stage.introduction, "lead").forEach(function (n) {
+  function renderSection(section) {
+    var i = sectionIndex(section.id);
+    main.appendChild(el("p", { className: "stage-label", text: (FILE_STEP ? "Step " : "Worksheet · Section ") + outlineNumber(section.id) + " of " + STEP_COUNT }));
+    main.appendChild(el("h2", { text: section.title }));
+    paragraphs(section.introduction, "lead").forEach(function (n) {
       main.appendChild(n);
     });
-    stage.blocks.forEach(function (b) {
-      var node = renderBlock(b, stage);
+    section.blocks.forEach(function (b) {
+      var node = renderBlock(b);
       if (node) main.appendChild(node);
     });
-    var next = STAGES[i + 1];
+    var next = SECTIONS[i + 1];
     var buttons = [];
-    if (i > 0) {
-      buttons.push(
-        el("button", {
-          type: "button",
-          className: "btn secondary",
-          text: "Back to " + STAGES[i - 1].title,
-          onclick: function () {
-            go(STAGES[i - 1].id);
-          },
-        })
-      );
-    }
-    if (next || (PART && !PART.last)) {
-      buttons.push(
-        el("button", {
-          type: "button",
-          className: "btn",
-          text: stage.nextLabel || (next ? "Continue to " + next.title : "Finish " + PART.label),
-          onclick: function () {
-            var list = problems(stage);
-            if (list.length) return showProblems(list);
-            state.completed[stage.id] = true;
-            go(next ? next.id : "part-end");
-          },
-        })
-      );
-    } else {
-      buttons.push(
-        el("button", {
-          type: "button",
-          className: "btn secondary",
-          text: "Check that every required item is complete",
-          onclick: function () {
-            var list = problems(stage);
-            if (list.length) return showProblems(list);
-            state.completed[stage.id] = true;
-            save();
-            renderNav();
-            showProblems([]);
-            announce("Every required item is complete. Review and download your report.");
-            var flag = main.querySelector(".complete-flag");
-            if (!flag) {
-              flag = el("p", { className: "status-message ok complete-flag", role: "status" });
-              stageActions().after(flag);
-            }
-            flag.textContent = "Every required item is complete. Review your report above and download it.";
-          },
-        })
-      );
-    }
-    if (stage.transition) main.appendChild(el("p", { className: "muted", text: stage.transition }));
-    main.appendChild(el("div", { className: "actions" }, buttons));
-  }
-
-  function renderPartEnd() {
-    var pe = PART.end;
-    main.appendChild(el("p", { className: "stage-label", text: PART.label + " complete" }));
-    main.appendChild(el("h2", { text: pe.heading }));
-    paragraphs(pe.paragraphs).forEach(function (n) {
-      main.appendChild(n);
-    });
-    main.appendChild(renderReportBlock({ heading: pe.reportHeading, intro: pe.reportIntro, teamFields: ["team.name", "team.members"], downloadLabel: pe.downloadLabel }));
-    var last = STAGES[STAGES.length - 1];
-    main.appendChild(
-      el("div", { className: "actions" }, [
-        el("button", {
-          type: "button",
-          className: "btn secondary",
-          text: "Back to " + last.title,
-          onclick: function () {
-            go(last.id);
-          },
-        }),
-      ])
+    buttons.push(
+      el("button", {
+        type: "button",
+        className: "btn",
+        text: next ? "Next: " + next.title : PART && !PART.last ? "Save your " + PART.label + " record" : "Review and download your report",
+        onclick: function () {
+          go(next ? "ws:" + next.id : "report");
+        },
+      })
     );
+    buttons.push(
+      el("button", {
+        type: "button",
+        className: "btn secondary",
+        text: "Back to the case file",
+        onclick: function () {
+          go("file");
+        },
+      })
+    );
+    main.appendChild(el("div", { className: "actions" }, buttons));
   }
 
   // ---------- Footer: clear saved answers ----------
