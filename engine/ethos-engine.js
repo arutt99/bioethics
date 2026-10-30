@@ -361,6 +361,7 @@
   }
 
   function go(view, focusTarget) {
+    trackReturn(currentView(), view);
     state.position[POSITION] = view;
     // Remember the last place worked on, for "Continue where you left off".
     if (view !== "start") state.position[POSITION + ":last"] = view;
@@ -373,6 +374,52 @@
       if (focusTarget) target.scrollIntoView({ block: "center" });
       else window.scrollTo(0, 0);
     }
+  }
+
+  // Leaving a worksheet step for the case file remembers the step and the last field
+  // written in, so the case file can offer a way straight back to it.
+  var RETURN_KEY = POSITION + ":return";
+  var lastField = null;
+  var returnField = null;
+
+  main.addEventListener("focusin", function (e) {
+    var t = e.target;
+    if (currentView().indexOf("ws:") === 0 && t.id && (t.tagName === "TEXTAREA" || t.tagName === "INPUT")) lastField = t.id;
+  });
+
+  function inCaseFile(view) {
+    return view === "file" || view.indexOf("item:") === 0;
+  }
+
+  function trackReturn(from, to) {
+    if (from.indexOf("ws:") === 0 && inCaseFile(to)) {
+      state.position[RETURN_KEY] = from;
+      returnField = lastField;
+    } else if (!inCaseFile(to)) {
+      delete state.position[RETURN_KEY];
+    }
+    if (from !== to) lastField = null;
+  }
+
+  function returnButton(className) {
+    var view = state.position[RETURN_KEY];
+    var i = view ? sectionIndex(view.slice(3)) : -1;
+    if (i === -1) return null;
+    var section = SECTIONS[i];
+    return el("button", {
+      type: "button",
+      className: className,
+      text: "Return to " + (FILE_STEP ? "Step " + outlineNumber(section.id) + ": " : "") + section.title,
+      onclick: function () {
+        var id = returnField;
+        go(view);
+        var field = id && document.getElementById(id);
+        if (field) {
+          field.focus();
+          field.scrollIntoView({ block: "center" });
+        }
+      },
+    });
   }
 
   function goToPrompt(section, promptId) {
@@ -535,14 +582,15 @@
     });
     main.appendChild(
       el("div", { className: "actions" }, [
-        el("button", {
-          type: "button",
-          className: "btn",
-          text: "Go to the worksheet",
-          onclick: function () {
-            go("ws:" + firstOpenSection().id);
-          },
-        }),
+        returnButton("btn") ||
+          el("button", {
+            type: "button",
+            className: "btn",
+            text: "Go to the worksheet",
+            onclick: function () {
+              go("ws:" + firstOpenSection().id);
+            },
+          }),
       ])
     );
   }
@@ -596,10 +644,12 @@
 
     var pos = ITEM_ORDER.indexOf(id);
     var nextId = ITEM_ORDER[pos + 1];
+    var back = returnButton("btn");
     var buttons = [
+      back,
       el("button", {
         type: "button",
-        className: "btn",
+        className: back ? "btn secondary" : "btn",
         text: "Back to the case file",
         onclick: function () {
           go("file");

@@ -51,6 +51,7 @@ The **Report** page lists any missing required answers (each one links to its fi
 
 Other behavior:
 
+- Students can open the case file from any step, through the navigation column or the Back to the case file button. When they came from a step, the case file and every item offer **Return to Step N**, which takes them back to the box they were last writing in. Answers are kept throughout.
 - Item numbers follow release order and never change between parts, so you can say "Ana takes items 1 to 3" at a roundtable.
 - In a later part, the case file keeps every earlier item and adds the new ones at the top under **New in Part 2**, with a New tag.
 - Answers autosave to `localStorage` on this device, under one key per case. Parts of the same case share that key, so Part 2 picks up Part 1 answers in the same browser. If they are missing, Part 2 asks students to restate them, and the report says the answers were restated.

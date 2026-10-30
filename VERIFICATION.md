@@ -131,3 +131,15 @@ Date: 2026-10-30. Tested with a throwaway three-part fictional case built around
 | A Part 3 report includes the Part 1 option list in the same browser, and says "No options listed" in a fresh one | Pass |
 | No horizontal scrolling at 360 px; no console or policy errors | Pass |
 | `npm run check` | Pass |
+
+# Verification record: return to step
+
+Date: 2026-10-30. Same throwaway cases, Chromium (Playwright). Earlier suites re-run: 39 and 27 checks pass.
+
+| Check | Result |
+| --- | --- |
+| Leaving a step for the case file offers "Return to Step N: title" on the case file and on every item, including after Next item | Pass |
+| Return goes back to the step, with focus in the field last written in; answers kept | Pass |
+| Also offered when the case file is opened from the navigation column | Pass |
+| Not offered when the case file is opened from the overview; cleared after moving to another step | Pass |
+| Cases without numbered steps say "Return to" plus the section title | Pass |
