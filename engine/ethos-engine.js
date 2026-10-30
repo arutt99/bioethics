@@ -18,6 +18,9 @@
   var PROMPTS = CASE.prompts;
   var STORAGE_KEY = "ethos:" + CASE.id + ":schema" + CASE.schemaVersion;
   var POSITION = PART ? PART.id : "single";
+  // With caseFile.folder, the case file is not a page: a folder in the header opens it
+  // over whatever step the student is on.
+  var FOLDER = !!(CASE.caseFile && CASE.caseFile.folder);
 
   var KINDS = [
     { id: "record", heading: "Records and documents", label: "Record", look: "chart" },
@@ -278,6 +281,8 @@
   // When the case file is one of the numbered steps (caseFile.step), the steps are
   // the worksheet sections plus the case file.
   var FILE_STEP = (CASE.caseFile && CASE.caseFile.step) || null;
+  // Sections are called steps when the case file is one of them, or sits beside them in a folder.
+  var STEPS = !!FILE_STEP || FOLDER;
   var STEP_COUNT = Math.max.apply(
     null,
     [FILE_STEP || 0].concat(
@@ -369,6 +374,7 @@
   }
 
   function go(view, focusTarget) {
+    if (FOLDER && inCaseFile(view)) return openFolder(view.indexOf("item:") === 0 ? view.slice(5) : null);
     trackReturn(currentView(), view);
     state.position[POSITION] = view;
     // Remember the last place worked on, for "Continue where you left off".
@@ -417,7 +423,7 @@
     return el("button", {
       type: "button",
       className: className,
-      text: "Return to " + (FILE_STEP ? "Step " + outlineNumber(section.id) + ": " : "") + section.title,
+      text: "Return to " + (STEPS ? "Step " + outlineNumber(section.id) + ": " : "") + section.title,
       onclick: function () {
         var id = returnField;
         go(view);
@@ -446,6 +452,7 @@
 
   // ---------- Navigation column ----------
 
+  // "view" is a view name, or a function to run instead of changing view.
   function navButton(view, number, title, status, current, extraClass) {
     var label = [];
     label.push(el("span", { className: "num", text: number, "aria-hidden": "true" }));
@@ -456,8 +463,10 @@
         type: "button",
         className: "step" + (extraClass ? " " + extraClass : ""),
         "aria-current": current ? "page" : null,
+        "aria-haspopup": typeof view === "function" ? "dialog" : null,
         onclick: function () {
-          go(view);
+          if (typeof view === "function") view();
+          else go(view);
         },
       },
       label
@@ -477,10 +486,25 @@
       return navButton("file", number, cf.navLabel || "Case file", openedCount + " of " + ITEM_ORDER.length + " items opened", view === "file" || view.indexOf("item:") === 0);
     }
     var top = el("ul", null, [el("li", null, [navButton("start", "•", "Overview", null, view === "start")])]);
-    if (!FILE_STEP) top.appendChild(el("li", null, [fileButton("•")]));
+    if (FOLDER) {
+      top.appendChild(
+        el("li", null, [
+          navButton(
+            function () {
+              openFolder();
+            },
+            "•",
+            cf.navLabel || "Case file",
+            openedCount + " of " + ITEM_ORDER.length + " items opened",
+            false,
+            "nav-folder"
+          ),
+        ])
+      );
+    } else if (!FILE_STEP) top.appendChild(el("li", null, [fileButton("•")]));
     nav.appendChild(top);
 
-    nav.appendChild(el("h3", { text: FILE_STEP ? "Steps" : "Worksheet" }));
+    nav.appendChild(el("h3", { text: STEPS ? "Steps" : "Worksheet" }));
     var list = el("ol");
     var fileShown = false;
     CASE.outline.forEach(function (o) {
@@ -542,6 +566,8 @@
         {
           type: "button",
           className: "tile tile-" + it.kind + (read ? " read" : ""),
+          "data-item": id,
+          "aria-haspopup": FOLDER ? "dialog" : null,
           onclick: function () {
             go("item:" + id);
           },
@@ -554,7 +580,7 @@
             it.summary ? el("span", { className: "tile-summary", text: it.summary }) : null,
             el("span", { className: "tile-status" }, [
               it.isNew ? el("span", { className: "tag new", text: "New" }) : null,
-              el("span", { text: read ? "Opened" : "Not opened yet" }),
+              el("span", { className: "tile-read", text: read ? "Opened" : "Not opened yet" }),
             ]),
           ]),
         ]
@@ -632,10 +658,45 @@
 
   function renderItem(id) {
     var it = ITEMS[id];
+    main.appendChild(el("p", { className: "stage-label", text: "Case file · Item " + it.number + " · " + kind(it.kind).label + (it.isNew ? " · New" : "") }));
+    itemSheet(id).forEach(function (n) {
+      main.appendChild(n);
+    });
+
+    var pos = ITEM_ORDER.indexOf(id);
+    var nextId = ITEM_ORDER[pos + 1];
+    var back = returnButton("btn");
+    var buttons = [
+      back,
+      el("button", {
+        type: "button",
+        className: back ? "btn secondary" : "btn",
+        text: "Back to the case file",
+        onclick: function () {
+          go("file");
+        },
+      }),
+    ];
+    if (nextId) {
+      buttons.push(
+        el("button", {
+          type: "button",
+          className: "btn secondary",
+          text: "Next item: " + ITEMS[nextId].number + ". " + ITEMS[nextId].title,
+          onclick: function () {
+            go("item:" + nextId);
+          },
+        })
+      );
+    }
+    main.appendChild(el("div", { className: "actions" }, buttons));
+  }
+
+  // An item's sheet of paper, and its notepad, for the case-file page or the folder.
+  function itemSheet(id) {
+    var it = ITEMS[id];
     var k = kind(it.kind);
     var look = LOOKS[it.look] ? it.look : k.look;
-    main.appendChild(el("p", { className: "stage-label", text: "Case file · Item " + it.number + " · " + k.label + (it.isNew ? " · New" : "") }));
-
     var head = el("header", { className: "sheet-head" }, [
       el("p", { className: "sheet-band" }, [el("span", { text: it.bandLabel || (look === k.look && k.band) || LOOKS[look] }), el("span", { text: "Item " + it.number })]),
     ]);
@@ -674,37 +735,282 @@
     if (it.limits) {
       body.appendChild(el("div", { className: "callout attention" }, [el("p", { className: "callout-label", text: "What this can’t tell you" })].concat(paragraphs(it.limits))));
     }
-    main.appendChild(el("article", { className: "sheet sheet-" + look }, [head, body]));
-    if (PROMPTS["notes." + id]) main.appendChild(el("div", { className: "notepad" }, [renderPrompt("notes." + id)]));
+    var out = [el("article", { className: "sheet sheet-" + look }, [head, body])];
+    if (PROMPTS["notes." + id]) out.push(el("div", { className: "notepad" }, [renderPrompt("notes." + id)]));
+    return out;
+  }
 
-    var pos = ITEM_ORDER.indexOf(id);
-    var nextId = ITEM_ORDER[pos + 1];
-    var back = returnButton("btn");
-    var buttons = [
-      back,
+  // ---------- Case folder (caseFile.folder) ----------
+  // The case file opens as a dialog over the current step, from a manila folder in the
+  // header, the navigation column, or any item tile. Closing it leaves the student
+  // exactly where they were, with focus back on what opened it.
+
+  var folder = null;
+  var FOLDER_KEY = POSITION + ":folder";
+  var NARROW = window.matchMedia ? window.matchMedia("(max-width: 759px)") : { matches: false };
+
+  function icon(d) {
+    var ns = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(ns, "svg");
+    var attrs = { viewBox: "0 0 20 20", fill: "none", stroke: "currentColor", "stroke-width": "1.8", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false" };
+    Object.keys(attrs).forEach(function (k) {
+      svg.setAttribute(k, attrs[k]);
+    });
+    var path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d);
+    svg.appendChild(path);
+    return svg;
+  }
+
+  function openedTotal() {
+    return ITEM_ORDER.filter(function (id) {
+      return state.opened[id];
+    }).length;
+  }
+
+  // Items in the order the folder lists them: new ones first, then by kind.
+  function folderOrder() {
+    var fresh = ITEM_ORDER.filter(function (id) {
+      return ITEMS[id].isNew;
+    });
+    var rest = [];
+    KINDS.forEach(function (k) {
+      ITEM_ORDER.forEach(function (id) {
+        if (ITEMS[id].kind === k.id && !ITEMS[id].isNew) rest.push(id);
+      });
+    });
+    return fresh.concat(rest);
+  }
+
+  function buildFolder() {
+    var count = el("span", { className: "folder-count" });
+    var button = el("button", { type: "button", className: "folder-btn", "aria-haspopup": "dialog", onclick: function () {
+      openFolder();
+    } }, [icon("M2 5.5A1.5 1.5 0 0 1 3.5 4H8l2 2h6.5A1.5 1.5 0 0 1 18 7.5v7a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 14.5z"), el("span", { text: "Case file" }), count]);
+    var actions = document.querySelector(".header-actions");
+    actions.insertBefore(button, actions.firstChild);
+
+    var index = el("nav", { className: "folder-index", "aria-label": "Case file contents" });
+    var page = el("div", { className: "folder-page" });
+    var inside = el("div", { className: "folder-inside" }, [index, page]);
+    var dialog = el("dialog", { className: "folder-dialog", "aria-labelledby": "folder-label" }, [
+      el("div", { className: "folder" }, [
+        el("p", { className: "folder-tab", id: "folder-label", text: "Case file" + (PART ? " · " + PART.label : "") + " · " + CASE.title }),
+        el(
+          "button",
+          {
+            type: "button",
+            className: "folder-close",
+            onclick: function () {
+              dialog.close();
+            },
+          },
+          [icon("M5 5l10 10M15 5 5 15"), "Close", el("span", { className: "visually-hidden", text: " the case file" })]
+        ),
+        inside,
+      ]),
+    ]);
+    // A click on the dimmed page around the folder closes it.
+    dialog.addEventListener("click", function (e) {
+      if (e.target === dialog) dialog.close();
+    });
+    dialog.addEventListener("close", function () {
+      renderNav();
+      refreshTiles();
+      var back = folder.opener;
+      if (!back || !back.isConnected) back = (back && back.classList.contains("nav-folder") && nav.querySelector(".nav-folder")) || button;
+      back.focus();
+    });
+    document.body.appendChild(dialog);
+    folder = { button: button, count: count, dialog: dialog, inside: inside, index: index, page: page, opener: null };
+    updateFolderButton();
+  }
+
+  function updateFolderButton() {
+    var n = openedTotal();
+    folder.count.textContent = "";
+    folder.count.appendChild(el("span", { "aria-hidden": "true", text: n + "/" + ITEM_ORDER.length }));
+    folder.count.appendChild(el("span", { className: "visually-hidden", text: ", " + n + " of " + ITEM_ORDER.length + " items opened" }));
+  }
+
+  // Tiles on the page behind the folder show what has been opened since.
+  function refreshTiles() {
+    var tiles = main.querySelectorAll(".tile[data-item]");
+    for (var i = 0; i < tiles.length; i++) {
+      var read = !!state.opened[tiles[i].getAttribute("data-item")];
+      tiles[i].classList.toggle("read", read);
+      tiles[i].querySelector(".tile-read").textContent = read ? "Opened" : "Not opened yet";
+    }
+  }
+
+  function openFolder(id) {
+    var target = id || state.position[FOLDER_KEY] || "cover";
+    if (target !== "cover" && !ITEMS[target]) target = "cover";
+    if (!folder.dialog.open) {
+      folder.opener = document.activeElement;
+      folder.dialog.showModal();
+    }
+    // On a phone the folder shows one side at a time; opening it shows the contents first.
+    showInFolder(target, !id && NARROW.matches);
+  }
+
+  function showInFolder(target, onIndex) {
+    state.position[FOLDER_KEY] = target;
+    if (target !== "cover") state.opened[target] = true;
+    save();
+    updateFolderButton();
+    renderFolderIndex(target);
+    renderFolderPage(target);
+    folder.inside.classList.toggle("on-index", !!onIndex);
+    if (onIndex) {
+      folder.index.scrollTop = 0;
+      folder.index.querySelector('[aria-current="true"]').focus();
+    } else {
+      folder.page.scrollTop = 0;
+      var h = folder.page.querySelector("h2");
+      h.setAttribute("tabindex", "-1");
+      h.focus();
+    }
+  }
+
+  function folderEntry(target, current) {
+    var cover = target === "cover";
+    var it = cover ? null : ITEMS[target];
+    var read = cover || !!state.opened[target];
+    return el("li", null, [
+      el(
+        "button",
+        {
+          type: "button",
+          className: "folder-entry" + (read && !cover ? " read" : ""),
+          "aria-current": current === target ? "true" : null,
+          onclick: function () {
+            showInFolder(target, false);
+          },
+        },
+        [
+          el("span", { className: "num", text: cover ? "" : "No. " + it.number, "aria-hidden": "true" }),
+          el("span", null, [
+            cover ? "The case in brief" : el("span", null, [el("span", { className: "visually-hidden", text: "Item " + it.number + ": " }), it.title]),
+            it && it.isNew ? el("span", { className: "tag new", text: "New" }) : null,
+            el("span", { className: "status", text: cover ? "Start here" : read ? "Opened" : "Not opened yet" }),
+          ]),
+        ]
+      ),
+    ]);
+  }
+
+  function renderFolderIndex(current) {
+    var index = folder.index;
+    index.textContent = "";
+    index.appendChild(el("h2", { text: "Contents" }));
+    index.appendChild(el("ul", null, [folderEntry("cover", current)]));
+    var fresh = ITEM_ORDER.filter(function (id) {
+      return ITEMS[id].isNew;
+    });
+    var groups = fresh.length ? [{ heading: "New in " + PART.label, ids: fresh }] : [];
+    KINDS.forEach(function (k) {
+      var ids = folderOrder().filter(function (id) {
+        return ITEMS[id].kind === k.id && !ITEMS[id].isNew;
+      });
+      if (ids.length) groups.push({ heading: (fresh.length ? "Earlier: " : "") + k.heading, ids: ids });
+    });
+    groups.forEach(function (g) {
+      index.appendChild(el("h3", { text: g.heading }));
+      index.appendChild(
+        el(
+          "ul",
+          null,
+          g.ids.map(function (id) {
+            return folderEntry(id, current);
+          })
+        )
+      );
+    });
+  }
+
+  function renderFolderPage(target) {
+    var page = folder.page;
+    page.textContent = "";
+    page.appendChild(
       el("button", {
         type: "button",
-        className: back ? "btn secondary" : "btn",
-        text: "Back to the case file",
+        className: "link-button folder-contents",
+        text: "All contents",
         onclick: function () {
-          go("file");
+          folder.inside.classList.add("on-index");
+          folder.index.querySelector('[aria-current="true"]').focus();
         },
-      }),
-    ];
-    if (nextId) {
+      })
+    );
+    if (target === "cover") {
+      var s = CASE.start;
+      var cf = CASE.caseFile || {};
+      page.appendChild(el("p", { className: "stage-label", text: "Case file · The case in brief" }));
+      page.appendChild(
+        el("article", { className: "sheet sheet-cover" }, [
+          el("header", { className: "sheet-head" }, [el("p", { className: "sheet-band" }, [el("span", { text: "Case summary" }), el("span", { text: PART ? PART.label : "" })]), el("h2", { text: s.heading })]),
+          el(
+            "div",
+            { className: "sheet-body" },
+            [el("p", { className: "lead", text: s.lead })].concat(
+              paragraphs(cf.intro),
+              paragraphs(["Everything the committee has on this case is in this folder. Open it from any step with the Case file button at the top of the screen. Closing it takes you back to where you were."], "muted")
+            )
+          ),
+        ])
+      );
+    } else {
+      var it = ITEMS[target];
+      page.appendChild(el("p", { className: "stage-label", text: "Case file · Item " + it.number + " · " + kind(it.kind).label + (it.isNew ? " · New" : "") }));
+      itemSheet(target).forEach(function (n) {
+        page.appendChild(n);
+      });
+    }
+    var order = ["cover"].concat(folderOrder());
+    var pos = order.indexOf(target);
+    function label(t) {
+      return t === "cover" ? "The case in brief" : ITEMS[t].number + ". " + ITEMS[t].title;
+    }
+    var buttons = [];
+    if (order[pos + 1]) {
       buttons.push(
         el("button", {
           type: "button",
-          className: "btn secondary",
-          text: "Next item: " + ITEMS[nextId].number + ". " + ITEMS[nextId].title,
+          className: "btn",
+          text: "Next: " + label(order[pos + 1]),
           onclick: function () {
-            go("item:" + nextId);
+            showInFolder(order[pos + 1], false);
           },
         })
       );
     }
-    main.appendChild(el("div", { className: "actions" }, buttons));
+    if (pos > 0) {
+      buttons.push(
+        el("button", {
+          type: "button",
+          className: "btn secondary",
+          text: "Previous: " + label(order[pos - 1]),
+          onclick: function () {
+            showInFolder(order[pos - 1], false);
+          },
+        })
+      );
+    }
+    buttons.push(
+      el("button", {
+        type: "button",
+        className: "btn secondary",
+        text: "Close the case file",
+        onclick: function () {
+          folder.dialog.close();
+        },
+      })
+    );
+    page.appendChild(el("div", { className: "actions" }, buttons));
   }
+
+  if (FOLDER) buildFolder();
 
   // ---------- Worksheet blocks ----------
 
@@ -1331,7 +1637,7 @@
         seen[id] = true;
         items.push({ label: p.shortLabel || p.label, answer: describeAnswer(id), note: null, missing: "" });
       });
-      if (items.length) out.push({ title: "Also recorded: " + (FILE_STEP ? "Step " + outlineNumber(s.id) + ", " : "") + s.title, items: items });
+      if (items.length) out.push({ title: "Also recorded: " + (STEPS ? "Step " + outlineNumber(s.id) + ", " : "") + s.title, items: items });
     });
     return out;
   }
@@ -1557,6 +1863,8 @@
   // ---------- Page views ----------
 
   function render() {
+    // A saved case-file view from before the case moved to a folder opens the overview.
+    if (FOLDER && inCaseFile(currentView())) state.position[POSITION] = "start";
     var view = currentView();
     syncOptionPrompts();
     // Opening an item marks it before the navigation column counts it.
@@ -1568,6 +1876,7 @@
     main.className = "panel view-" + (view.indexOf("item:") === 0 ? "item" : view.indexOf("ws:") === 0 ? "step" : view === "file" || view === "report" ? view : "start");
     shownPerspectives = [];
     renderNav();
+    if (folder) updateFolderButton();
     if (view === "file") return renderFile();
     if (view === "report") return renderReport();
     if (view.indexOf("item:") === 0 && ITEMS[view.slice(5)]) return renderItem(view.slice(5));
@@ -1599,16 +1908,42 @@
         })
       );
     }
-    buttons.push(
-      el("button", {
-        type: "button",
-        className: resume ? "btn secondary" : "btn start",
-        text: s.startLabel || "Open the case file",
-        onclick: function () {
-          go("file");
-        },
-      })
-    );
+    if (FOLDER) {
+      // The steps are the way through; the case file is always one click away.
+      var first = SECTIONS[0];
+      buttons.push(
+        el("button", {
+          type: "button",
+          className: resume ? "btn secondary" : "btn start",
+          text: s.startLabel || "Begin with Step " + outlineNumber(first.id) + ": " + first.title,
+          onclick: function () {
+            go("ws:" + first.id);
+          },
+        })
+      );
+      buttons.push(
+        el("button", {
+          type: "button",
+          className: "btn secondary",
+          "aria-haspopup": "dialog",
+          text: "Open the case file",
+          onclick: function () {
+            openFolder();
+          },
+        })
+      );
+    } else {
+      buttons.push(
+        el("button", {
+          type: "button",
+          className: resume ? "btn secondary" : "btn start",
+          text: s.startLabel || "Open the case file",
+          onclick: function () {
+            go("file");
+          },
+        })
+      );
+    }
     jacket.appendChild(el("div", { className: "actions start-actions" }, buttons));
     if (versionNotice) {
       main.appendChild(
@@ -1638,7 +1973,7 @@
 
   function renderSection(section) {
     var i = sectionIndex(section.id);
-    main.appendChild(el("p", { className: "stage-label", text: (FILE_STEP ? "Step " : "Worksheet · Section ") + outlineNumber(section.id) + " of " + STEP_COUNT }));
+    main.appendChild(el("p", { className: "stage-label", text: (STEPS ? "Step " : "Worksheet · Section ") + outlineNumber(section.id) + " of " + STEP_COUNT }));
     main.appendChild(el("h2", { text: section.title }));
     paragraphs(section.introduction, "lead").forEach(function (n) {
       main.appendChild(n);
@@ -1663,7 +1998,8 @@
       el("button", {
         type: "button",
         className: "btn secondary",
-        text: "Back to the case file",
+        "aria-haspopup": FOLDER ? "dialog" : null,
+        text: FOLDER ? "Open the case file" : "Back to the case file",
         onclick: function () {
           go("file");
         },

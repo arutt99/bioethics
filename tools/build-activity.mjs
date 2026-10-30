@@ -233,6 +233,11 @@ for (const s of source.worksheet || []) {
 }
 const fileStep = source.caseFile && source.caseFile.step;
 need(fileStep === undefined || (Number.isInteger(fileStep) && fileStep >= 1 && fileStep <= (source.worksheet || []).length + 1), "caseFile.step must be a whole number from 1 to one more than the number of worksheet sections");
+for (const cf of [source.caseFile, ...partsList.map((p) => p.caseFile)].filter(Boolean)) {
+  need(cf.folder === undefined || typeof cf.folder === "boolean", "caseFile.folder must be true or false");
+  // In a folder the case file sits beside the steps, so it can't also be one of them.
+  need(!(cf.folder && cf.step), "caseFile.folder and caseFile.step can't be used together: with a folder, write every step as a worksheet section");
+}
 if (errors.length) fail(`case file has problems:\n  ${errors.join("\n  ")}`);
 
 // ---------- Number the case-file items ----------

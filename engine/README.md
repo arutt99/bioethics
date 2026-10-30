@@ -37,7 +37,12 @@ Cases follow the method students use to solve cases:
 5. Choose a course of action and defend it
 6. Carry out the chosen action and assess its consequences
 
-Set `caseFile.step: 2` and the navigation column becomes a numbered list of steps, with the case file in second place. Write the other five steps as worksheet sections. A skeleton is at the end of this file.
+There are two ways to place the case file:
+
+- **In a folder (recommended).** Set `caseFile.folder: true` and write all six steps as worksheet sections, including step 2. The case file is no longer a page: a manila **Case file** folder in the header opens it over whatever step the student is on, and closing it puts them back exactly where they were. Step 2 can link to the items with an `items` block and ask what the facts are.
+- **As step 2.** Set `caseFile.step: 2` and the navigation column becomes a numbered list of steps, with the case file in second place. Write the other five steps as worksheet sections.
+
+A skeleton is at the end of this file.
 
 ## What students see
 
@@ -55,7 +60,8 @@ Other behavior:
 
 - **Export to Word** sits in the header, which stays at the top of the screen on every page. At any point it saves everything entered so far as a `.docx` file for uploading to the LMS. The file is named after the report (`report.filename` with `.docx`) and has a letterhead, case details, and every report section as a real Word heading. If required answers are still missing, it is marked as work in progress. The file is built in the browser, with no library or network, so the page's security policy is unchanged.
 - The report and the Word export never leave work out. Any answer a case's report outline doesn't list appears at the end under "Also recorded", by step.
-- Students can open the case file from any step, through the navigation column or the Back to the case file button. When they came from a step, the case file and every item offer **Return to Step N**, which takes them back to the box they were last writing in. Answers are kept throughout.
+- With `caseFile.folder`, the case file opens as a folder over the current page, from the header (which always shows how many items have been opened), the navigation column, the Open the case file buttons, or any item tile in a step. The left flap lists the contents, starting with **The case in brief** (the opening screen's lead and `caseFile.intro`); the right shows the item, with its notes box and Next and Previous. Escape, Close, or a click outside closes it, and focus returns to what opened it. Reopening shows the item last read. On a phone the folder fills the screen and shows the contents or one item at a time.
+- Without a folder, students can open the case file from any step, through the navigation column or the Back to the case file button. When they came from a step, the case file and every item offer **Return to Step N**, which takes them back to the box they were last writing in. Answers are kept throughout.
 - Item numbers follow release order and never change between parts, so you can say "Ana takes items 1 to 3" at a roundtable.
 - In a later part, the case file keeps every earlier item and adds the new ones at the top under **New in Part 2**, with a New tag.
 - Answers autosave to `localStorage` on this device, under one key per case. Parts of the same case share that key, so Part 2 picks up Part 1 answers in the same browser. If they are missing, Part 2 asks students to restate them, and the report says the answers were restated.
@@ -75,7 +81,7 @@ A case file is an ES module (`export default { ... }`) or JSON.
 | `id`, `version`, `title` | Stable lowercase id; version string shown in reports |
 | `versionNote` | Optional banner on the opening screen (for drafts) |
 | `start` | Opening screen: `heading`, `lead`, `startLabel` (default "Open the case file"), `sections[]`. Can be set per part instead |
-| `caseFile` | Optional `{ heading, intro[], step, navLabel }`. `heading` and `intro` appear above the tiles (for example, roundtable instructions). `step` makes the case file a numbered step; `navLabel` is its name in the navigation column. Can be set per part |
+| `caseFile` | Optional `{ folder, heading, intro[], step, navLabel }`. `folder: true` opens the case file as a folder over any step (see above); it can't be combined with `step`. `heading` and `intro` appear above the tiles, or on the folder's first page (for example, roundtable instructions). `step` makes the case file a numbered step; `navLabel` is its name in the navigation column. Can be set per part |
 | `items` | The case file: `{ id: item }`. See below |
 | `worksheet` | Written sections: `[{ id, title, introduction[], blocks[], step }]`. Sections are numbered in order; `step` repeats an earlier number, for a follow-up such as "6 Assess the consequences" in a later part. Use it only on the last sections |
 | `prompts` | `{ id: { type: textarea\|text\|choice\|listChoice, label, shortLabel, help, required, requiredIf: { prompt, equals }, options, restateLabel, rows } }`. `team.name` and `team.members` are added if missing. A `requiredIf` prompt appears only when its condition holds. If a student changes the choice after writing, the text stays on screen, labelled as left out of the report |
@@ -152,10 +158,18 @@ export default {
   id: "my-case",
   version: "0.1-draft",
   title: "My Case",
-  caseFile: { step: 2, navLabel: "Gather relevant information", heading: "Gather relevant information" },
+  caseFile: { folder: true },
   items: { /* records, people, medical background, policies */ },
   worksheet: [
     { id: "problem", title: "Identify the moral problem", blocks: [{ type: "prompts", ids: ["problem", "initial-view"] }] },
+    {
+      id: "gather",
+      title: "Gather relevant information",
+      blocks: [
+        { type: "items", heading: "In the case file", ids: [/* every item */] },
+        { type: "prompts", ids: ["key-facts", "unknowns"] },
+      ],
+    },
     {
       id: "options",
       title: "Identify the options and their likely consequences",

@@ -406,21 +406,26 @@ button.step:hover {
 
 /* ---------- Page text ---------- */
 
-main h2 {
+main h2,
+.folder-page h2 {
   margin: 0 0 4px;
   font-size: 1.625rem;
   line-height: 1.25;
 }
-main h3 {
+main h3,
+.folder-page h3 {
   margin: 32px 0 8px;
   font-size: 1.1875rem;
 }
-main h4 {
+main h4,
+.folder-page h4 {
   margin: 16px 0 4px;
   font-size: 1.0625rem;
 }
 main p,
-main li {
+main li,
+.folder-page p,
+.folder-page li {
   max-width: 68ch;
 }
 .stage-label {
@@ -438,7 +443,9 @@ main li {
   color: var(--ink-muted);
 }
 main .role,
-main .source {
+main .source,
+.folder-page .role,
+.folder-page .source {
   margin: 0 0 4px;
   color: var(--ink-muted);
   font-size: 0.9375rem;
@@ -694,6 +701,265 @@ main.view-file h3::after {
   background: rgba(255, 255, 255, 0.45);
 }
 
+/* ---------- Case folder: the case file over any step (caseFile.folder) ---------- */
+
+/* In the header: a manila folder with its tab, beside Export to Word. */
+.folder-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--manila-edge);
+  border-radius: 0 var(--radius) var(--radius) var(--radius);
+  background: var(--manila);
+  color: var(--manila-ink);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.folder-btn::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: -1px;
+  width: 45%;
+  height: 7px;
+  background: var(--manila-tab);
+  border: 1px solid var(--manila-edge);
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+}
+.folder-btn:hover {
+  background: #f7ecca;
+}
+.folder-btn svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.folder-count {
+  padding: 0 7px;
+  border: 1px solid var(--manila-edge);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+}
+@media (max-width: 600px) {
+  .folder-btn {
+    min-height: 40px;
+    padding: 6px 12px;
+  }
+}
+
+/* The open folder: contents on the left flap, the item on the right. */
+html:has(.folder-dialog[open]) {
+  overflow: hidden;
+}
+.folder-dialog {
+  width: min(72rem, calc(100vw - 32px));
+  height: min(56rem, calc(100vh - 32px));
+  max-width: none;
+  max-height: none;
+  padding: 32px 0 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  overflow: visible;
+}
+.folder-dialog[open] {
+  display: flex;
+}
+.folder-dialog::backdrop {
+  background: rgba(16, 33, 43, 0.6);
+}
+.folder {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--manila);
+  border: 1px solid var(--manila-edge);
+  border-radius: 0 8px 8px 8px;
+  box-shadow: 0 2px 0 var(--manila-edge), 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+.folder-tab,
+.folder-close {
+  position: absolute;
+  top: -32px;
+  height: 32px;
+  margin: 0;
+  border: 1px solid var(--manila-edge);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: var(--manila-tab);
+  color: var(--manila-ink);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.folder-tab {
+  left: -1px;
+  max-width: calc(100% - 9rem);
+  padding: 6px 16px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.folder-close {
+  right: -1px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  font-family: var(--font);
+  cursor: pointer;
+}
+.folder-close:hover {
+  background: var(--manila);
+}
+.folder-close svg {
+  width: 16px;
+  height: 16px;
+}
+.folder-inside {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+}
+.folder-index,
+.folder-page {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.folder-index {
+  padding: 16px 12px 16px 14px;
+  border-right: 1px solid var(--manila-edge);
+  box-shadow: inset -8px 0 10px -10px rgba(59, 47, 18, 0.5);
+}
+.folder-index h2,
+.folder-index h3 {
+  margin: 0 0 6px;
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--manila-ink);
+}
+.folder-index h3 {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--manila-edge);
+}
+.folder-index ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.folder-index li + li {
+  margin-top: 2px;
+}
+.folder-entry {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.3;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.folder-entry:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+.folder-entry[aria-current="true"] {
+  background: var(--paper);
+  border-color: var(--manila-edge);
+  box-shadow: 0 1px 0 var(--manila-edge);
+  font-weight: 700;
+}
+.folder-entry .num {
+  flex: none;
+  min-width: 3.25rem;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--manila-ink);
+  padding-top: 1px;
+}
+.folder-entry .status {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--manila-ink);
+}
+.folder-entry.read .status::before {
+  content: "\2713\00a0";
+  color: var(--success);
+  font-weight: 700;
+}
+.folder-entry .tag.new {
+  margin-left: 6px;
+  font-size: 0.6875rem;
+}
+.folder-page {
+  padding: 16px 20px 24px;
+}
+.folder-page .sheet {
+  max-width: 50rem;
+}
+.folder-page > .notepad {
+  max-width: 50rem;
+}
+.folder-contents {
+  display: none;
+}
+@media (max-width: 759px) {
+  .folder-dialog {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    margin: 0;
+    padding-top: 40px;
+  }
+  .folder {
+    border-radius: 0 8px 0 0;
+  }
+  .folder-inside {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .folder-inside.on-index .folder-page,
+  .folder-inside:not(.on-index) .folder-index {
+    display: none;
+  }
+  .folder-index {
+    border-right: 0;
+    box-shadow: none;
+  }
+  .folder-page {
+    padding: 12px 10px 20px;
+  }
+  .folder-contents {
+    display: inline-block;
+    margin: 0 0 10px;
+    font-weight: 600;
+  }
+}
+
 /* ---------- Items: sheets of paper ---------- */
 
 .sheet {
@@ -707,7 +973,8 @@ main.view-file h3::after {
   padding: 0 28px 18px;
   border-bottom: 1px solid var(--rule);
 }
-main .sheet-band {
+main .sheet-band,
+.folder-page .sheet-band {
   max-width: none;
 }
 .sheet-band {
@@ -890,7 +1157,8 @@ main .sheet-band {
   background: #fffdf2;
 }
 
-main.view-item > .actions {
+main.view-item > .actions,
+.folder-page > .actions {
   border-top: 0;
   margin-top: 20px;
   padding-top: 0;
@@ -1328,8 +1596,16 @@ main .word-count {
   .export-btn,
   .export-status,
   .option-card,
-  .progress {
+  .progress,
+  .folder-btn,
+  .folder-btn::before,
+  .folder,
+  .folder-tab,
+  .folder-close {
     border: 1px solid CanvasText;
+  }
+  .folder-entry[aria-current="true"] {
+    outline: 2px solid Highlight;
   }
   .progress::before {
     display: none;

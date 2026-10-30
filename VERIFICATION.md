@@ -194,3 +194,21 @@ Date: 2026-10-30. Throwaway test cases, Chromium (Playwright). Exported files ch
 | Header stays at the top when scrolled; the workflow column stays on screen below it (this fixes a regression from the redesign) | Pass |
 | Phone: header 89 px tall, no horizontal scrolling | Pass |
 | Earlier suites re-run: 39, 27, 11, and 21 checks pass | Pass |
+
+# Verification record: case folder
+
+Date: 2026-10-30. `caseFile.folder: true`, tested with a private six-step case in Chromium (Playwright), at 1280 px and 375 px. The same case rebuilt with `caseFile.step: 2` was used to check that cases without a folder are unchanged.
+
+| Check | Result |
+| --- | --- |
+| Navigation lists six steps, all worksheet sections; case file is a separate entry with an opened count | Pass |
+| Opening screen offers Begin with Step 1 and Open the case file | Pass |
+| Header folder opens a modal over the current step, on The case in brief, with focus on its heading | Pass |
+| Item tiles in a step open the folder at that item; items are marked opened in the index, header count, navigation, and tiles after closing | Pass |
+| Notes typed in the folder are saved and appear in the report | Pass |
+| Escape, Close, and Close the case file close it; answers in the step are kept; focus returns to what opened it, including the navigation entry after the navigation redraws | Pass |
+| Reopening shows the item last read | Pass |
+| At 375 px the folder fills the screen, opens on the contents, shows one item at a time with All contents to go back; no horizontal scrolling | Pass |
+| Build refuses `folder` together with `step` | Pass |
+| Without `folder`: no header folder; case file page, item pages, and Return to Step N work as before | Pass |
+| No script errors | Pass |
