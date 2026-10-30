@@ -41,6 +41,8 @@ Set `caseFile.step: 2` and the navigation column becomes a numbered list of step
 
 ## What students see
 
+The pages look like the working papers of a hospital ethics committee. Records are drawn as clinical charts, with label/value `rows` set out as chart fields. People are interview transcripts, medical background is a plain-language reference sheet, and policies are formal documents. The case file is a drawer of numbered manila folders, and item notes sit on a notepad page. Body text stays in a plain sans-serif. Every colour pair meets WCAG AA, and status is always written out, never shown by colour alone. The design also adapts to Windows high-contrast mode, to reduced-motion settings, and to phone screens.
+
 A page has two areas, and students move between them freely:
 
 - **Case file.** Numbered tiles grouped into *Records and documents*, *People involved*, *Medical background*, and *Policies, codes and law*. Students open any tile in any order; nothing is required. Each tile shows whether it has been opened. People have expandable interview questions. Every item has an optional notes box, and any notes appear at the end of the report.
@@ -82,7 +84,7 @@ A case file is an ES module (`export default { ... }`) or JSON.
 
 ### Items
 
-Every item has `kind`, `title`, and optionally `summary` (one line on the tile), `source`, `introduction[]`, `sections[]`, `limits[]` (shown as "What this can't tell you"), `noteLabel`, and `noteField: false` to remove its notes box.
+Every item has `kind`, `title`, and optionally `look` (how its page is drawn: `chart`, `interview`, `reference`, `document`, or `letter`; the default follows the kind), `bandLabel` (the label in the band across the top of its page), `summary` (one line on the tile), `source`, `introduction[]`, `sections[]`, `limits[]` (shown as "What this can't tell you"), `noteLabel`, and `noteField: false` to remove its notes box.
 
 Each entry in `sections` can have `heading`, `paragraphs[]`, `items[]` (a bulleted list), `rows` (`[label, value]` pairs, shown as a table), `quote[]`, and `quoteSource`.
 

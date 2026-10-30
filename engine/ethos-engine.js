@@ -20,11 +20,19 @@
   var POSITION = PART ? PART.id : "single";
 
   var KINDS = [
-    { id: "record", heading: "Records and documents", label: "Record" },
-    { id: "person", heading: "People involved", label: "Person" },
-    { id: "background", heading: "Medical background", label: "Medical background" },
-    { id: "policy", heading: "Policies, codes and law", label: "Policy" },
+    { id: "record", heading: "Records and documents", label: "Record", look: "chart" },
+    { id: "person", heading: "People involved", label: "Person", look: "interview" },
+    { id: "background", heading: "Medical background", label: "Medical background", look: "reference" },
+    { id: "policy", heading: "Policies, codes and law", label: "Policy", look: "document", band: "Policy, code, or law" },
   ];
+  // The band at the top of each item's sheet. A case can set an item's "look".
+  var LOOKS = {
+    chart: "Clinical record",
+    interview: "Interview",
+    reference: "Plain-language reference",
+    document: "Document",
+    letter: "Correspondence",
+  };
   function kind(id) {
     for (var i = 0; i < KINDS.length; i++) if (KINDS[i].id === id) return KINDS[i];
     return KINDS[0];
@@ -533,13 +541,13 @@
         "button",
         {
           type: "button",
-          className: "tile" + (read ? " read" : ""),
+          className: "tile tile-" + it.kind + (read ? " read" : ""),
           onclick: function () {
             go("item:" + id);
           },
         },
         [
-          el("span", { className: "tile-num", text: String(it.number), "aria-hidden": "true" }),
+          el("span", { className: "tile-num", text: "No. " + it.number, "aria-hidden": "true" }),
           el("span", { className: "tile-body" }, [
             el("span", { className: "tile-kind", text: meta }),
             el("span", { className: "tile-title" }, [el("span", { className: "visually-hidden", text: "Item " + it.number + ": " }), it.title]),
@@ -600,37 +608,63 @@
     return SECTIONS[0];
   }
 
+  function initials(name) {
+    return name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(function (w) {
+        return w.charAt(0).toUpperCase();
+      })
+      .join("");
+  }
+
+  // Label/value rows. On a chart they read as the fields at the top of a record.
+  function chartFields(rows) {
+    return el(
+      "dl",
+      { className: "chart-fields" },
+      rows.map(function (r) {
+        return el("div", null, [el("dt", { text: r[0] }), el("dd", { text: r[1] })]);
+      })
+    );
+  }
+
   function renderItem(id) {
     var it = ITEMS[id];
     var k = kind(it.kind);
+    var look = LOOKS[it.look] ? it.look : k.look;
     main.appendChild(el("p", { className: "stage-label", text: "Case file · Item " + it.number + " · " + k.label + (it.isNew ? " · New" : "") }));
-    main.appendChild(el("h2", { text: it.title }));
-    if (it.role) main.appendChild(el("p", { className: "role", text: it.role }));
-    if (it.source) main.appendChild(el("p", { className: "source", text: it.source }));
+
+    var head = el("header", { className: "sheet-head" }, [
+      el("p", { className: "sheet-band" }, [el("span", { text: it.bandLabel || (look === k.look && k.band) || LOOKS[look] }), el("span", { text: "Item " + it.number })]),
+    ]);
+    var titleRow = el("div", { className: "sheet-title" }, [
+      it.kind === "person" ? el("span", { className: "avatar", text: initials(it.title), "aria-hidden": "true" }) : null,
+      el("div", null, [el("h2", { text: it.title }), it.role ? el("p", { className: "role", text: it.role }) : null, it.source ? el("p", { className: "source", text: it.source }) : null]),
+    ]);
+    head.appendChild(titleRow);
     if (it.kind === "background") {
-      main.appendChild(
-        el("p", {
-          className: "muted",
-          text: "Plain-language background to help you follow the case. It is simplified, and it is not medical advice.",
-        })
-      );
+      head.appendChild(el("p", { className: "sheet-note", text: "Plain-language background to help you follow the case. It is simplified, and it is not medical advice." }));
     }
+
+    var body = el("div", { className: "sheet-body" });
     paragraphs(it.introduction, "lead").forEach(function (n) {
-      main.appendChild(n);
+      body.appendChild(n);
     });
     (it.sections || []).forEach(function (sec) {
       var nodes = [sec.heading ? el("h3", { text: sec.heading }) : null].concat(paragraphs(sec.paragraphs));
       if (sec.items) nodes.push(bullets(sec.items));
-      if (sec.rows) nodes.push(recordTable(sec.rows));
+      if (sec.rows) nodes.push(look === "chart" ? chartFields(sec.rows) : recordTable(sec.rows));
       if (sec.quote) nodes.push(el("blockquote", null, paragraphs(sec.quote).concat(sec.quoteSource ? [el("p", { className: "source", text: sec.quoteSource })] : [])));
-      main.appendChild(el("section", null, nodes));
+      body.appendChild(el("section", null, nodes));
     });
     if (it.questions && it.questions.length) {
-      main.appendChild(el("h3", { text: it.questionsHeading || "Questions you can ask" }));
-      main.appendChild(
+      body.appendChild(el("h3", { text: it.questionsHeading || "Questions you can ask" }));
+      body.appendChild(
         el(
           "div",
-          null,
+          { className: "transcript" },
           it.questions.map(function (q) {
             return disclosure(q.question, paragraphs(q.answer), "h4");
           })
@@ -638,9 +672,10 @@
       );
     }
     if (it.limits) {
-      main.appendChild(el("div", { className: "callout attention" }, [el("p", { className: "callout-label", text: "What this can’t tell you" })].concat(paragraphs(it.limits))));
+      body.appendChild(el("div", { className: "callout attention" }, [el("p", { className: "callout-label", text: "What this can’t tell you" })].concat(paragraphs(it.limits))));
     }
-    if (PROMPTS["notes." + id]) main.appendChild(renderPrompt("notes." + id));
+    main.appendChild(el("article", { className: "sheet sheet-" + look }, [head, body]));
+    if (PROMPTS["notes." + id]) main.appendChild(el("div", { className: "notepad" }, [renderPrompt("notes." + id)]));
 
     var pos = ITEM_ORDER.indexOf(id);
     var nextId = ITEM_ORDER[pos + 1];
@@ -1234,10 +1269,12 @@
     out.push("<title>" + escapeHTML(model.title + ": " + model.caseTitle) + "</title>");
     out.push(
       "<style>body{font-family:system-ui,'Segoe UI',Arial,sans-serif;line-height:1.5;color:#17212b;max-width:46rem;margin:2rem auto;padding:0 1rem}" +
-        "h1{font-size:1.5rem}h2{font-size:1.2rem;margin-top:2rem;border-bottom:1px solid #d1d8e0;padding-bottom:4px}h3{font-size:1rem;margin:1.25rem 0 .25rem}" +
-        ".answer{white-space:pre-wrap;margin:0}.missing{font-style:italic;color:#7a4b00}.note{color:#4b5563;font-size:.9rem;margin:0}dt{font-weight:600}dd{margin:0 0 .5rem}</style>\n</head>\n<body>"
+        ".letterhead{border-top:6px solid #10384c;border-bottom:2px solid #10384c;padding:12px 0;margin-bottom:16px}.letterhead p{margin:0;font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:#0f6e6e;font-weight:700}" +
+        "h1{font-size:1.5rem;margin:4px 0 0}h2{font-size:.9rem;letter-spacing:.08em;text-transform:uppercase;color:#10384c;margin-top:2rem;border-bottom:1px solid #b9cfd8;padding-bottom:4px}h3{font-size:1rem;margin:1.25rem 0 .25rem}" +
+        "dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;background:#eef4f6;padding:12px 16px;border-radius:4px}dt{font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:#10384c}dd{margin:0}" +
+        ".answer{white-space:pre-wrap;margin:0}.missing{font-style:italic;color:#7a4b00}.note{color:#4b5563;font-size:.9rem;margin:0}</style>\n</head>\n<body>"
     );
-    out.push("<h1>" + escapeHTML(model.title) + "</h1>");
+    out.push('<header class="letterhead"><p>ETHOS · Clinical Ethics Committee</p><h1>' + escapeHTML(model.title) + "</h1></header>");
     out.push("<dl><dt>Case</dt><dd>" + escapeHTML(model.caseTitle + " (version " + model.version + ")" + (model.part ? ", " + model.part : "")) + "</dd>");
     out.push("<dt>Team</dt><dd>" + escapeHTML(model.team || "Not given") + "</dd>");
     out.push("<dt>Members</dt><dd>" + escapeHTML(model.members || "Not given") + "</dd>");
@@ -1362,6 +1399,7 @@
       save();
     }
     main.textContent = "";
+    main.className = "panel view-" + (view.indexOf("item:") === 0 ? "item" : view.indexOf("ws:") === 0 ? "step" : view === "file" || view === "report" ? view : "start");
     shownPerspectives = [];
     renderNav();
     if (view === "file") return renderFile();
@@ -1374,9 +1412,14 @@
   function renderStart() {
     var s = CASE.start;
     var resume = state.position[POSITION + ":last"];
-    main.appendChild(el("p", { className: "stage-label", text: PART ? PART.label : "Consultation" }));
-    main.appendChild(el("h2", { text: s.heading }));
-    main.appendChild(el("p", { className: "lead", text: s.lead }));
+    var jacket = el("div", { className: "jacket" }, [
+      el("p", { className: "jacket-tab", text: PART ? "Case file · " + PART.label : "Case file" }),
+      el("p", { className: "stamp", text: "For committee review" }),
+      el("p", { className: "stage-label", text: PART ? PART.label : "Consultation" }),
+      el("h2", { text: s.heading }),
+      el("p", { className: "lead", text: s.lead }),
+    ]);
+    main.appendChild(jacket);
     var buttons = [];
     if (resume) {
       buttons.push(
@@ -1400,7 +1443,7 @@
         },
       })
     );
-    main.appendChild(el("div", { className: "actions start-actions" }, buttons));
+    jacket.appendChild(el("div", { className: "actions start-actions" }, buttons));
     if (versionNotice) {
       main.appendChild(
         el("div", { className: "callout attention" }, [

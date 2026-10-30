@@ -143,3 +143,21 @@ Date: 2026-10-30. Same throwaway cases, Chromium (Playwright). Earlier suites re
 | Also offered when the case file is opened from the navigation column | Pass |
 | Not offered when the case file is opened from the overview; cleared after moving to another step | Pass |
 | Cases without numbered steps say "Return to" plus the section title | Pass |
+
+# Verification record: committee design
+
+Date: 2026-10-30. Visual redesign of the homepage, the code prompt, and the engine. Chromium (Playwright), at 1280 px and 375 px wide. Throwaway test cases and a throwaway code, kept outside the repository.
+
+| Check | Result |
+| --- | --- |
+| Earlier suites still pass: case file 39, six-step method 27, return to step 11 | Pass |
+| Every text colour pair at least 4.5:1, and control edges at least 3:1 (27 pairs checked) | Pass |
+| No horizontal scrolling at 375 px on the homepage, case file, and a chart | Pass |
+| Homepage under its Content Security Policy: lists cases, no console or policy errors | Pass |
+| Code prompt built with the new template: wrong code shows the error, right code opens the case | Pass |
+| Chart fields use a description list (label and value read together) | Pass |
+
+## Not yet checked
+
+- The published activities still use the previous code prompt until they are encrypted again with the new template
+- Windows high-contrast mode on a real machine, Safari and Firefox, a screen reader pass

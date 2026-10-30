@@ -311,7 +311,7 @@ function render(data, pageTitle, eyebrow) {
   return readFileSync(join(engineDir, "template.html"), "utf8").replace(/\{\{([A-Z_]+)\}\}/g, (m, k) => (k in swaps ? swaps[k] : m));
 }
 
-const eyebrow = source.eyebrow || "ETHOS consultation";
+const eyebrow = source.eyebrow || "ETHOS · Clinical Ethics Committee";
 if (source.parts && source.parts.length) {
   source.parts.forEach((part, i) => {
     const data = assemble(part, i);

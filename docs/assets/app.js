@@ -24,7 +24,7 @@
   function groupLabel(activity) {
     if (activity.week) return "Week " + activity.week;
     if (activity.topic) return activity.topic;
-    return "Activities";
+    return "Cases";
   }
 
   function metaText(activity) {
@@ -34,9 +34,17 @@
     return parts.join(" · ");
   }
 
-  function buildCard(activity) {
+  function pad(n) {
+    return n < 10 ? "0" + n : String(n);
+  }
+
+  // Each case is a manila folder; its tab carries its place on the docket.
+  function buildCard(activity, number) {
     var item = el("li");
     var card = el("article", "card");
+    var tab = el("p", "folder-tab", "No. " + pad(number));
+    tab.setAttribute("aria-hidden", "true");
+    card.appendChild(tab);
     var headingId = "activity-" + activity.id;
     card.setAttribute("aria-labelledby", headingId);
 
@@ -51,13 +59,13 @@
 
     var footer = el("div", "card-footer");
     if (activity.status === "available") {
-      var link = el("a", "button", "Open activity");
+      var link = el("a", "button", "Open case");
       link.href = activity.path;
-      link.setAttribute("aria-label", "Open activity: " + activity.title);
+      link.setAttribute("aria-label", "Open case: " + activity.title);
       footer.appendChild(link);
-      footer.appendChild(el("span", "badge badge-available", "Access code required"));
+      footer.appendChild(el("span", "stamp stamp-open", "Access code required"));
     } else {
-      footer.appendChild(el("span", "badge badge-soon", "Coming soon"));
+      footer.appendChild(el("span", "stamp stamp-soon", "Coming soon"));
     }
     card.appendChild(footer);
     item.appendChild(card);
@@ -79,9 +87,13 @@
 
     var library = document.getElementById("library");
     library.replaceChildren();
+    var numbers = {};
+    visible.forEach(function (a, i) {
+      numbers[a.id] = i + 1;
+    });
 
     if (!visible.length) {
-      showMessage("No activities are listed yet. Check back later.", false);
+      showMessage("No cases are on the docket yet. Check back later.", false);
       return;
     }
 
@@ -106,7 +118,7 @@
       section.appendChild(heading);
       var list = el("ul", "grid");
       byLabel[label].forEach(function (a) {
-        list.appendChild(buildCard(a));
+        list.appendChild(buildCard(a, numbers[a.id]));
       });
       section.appendChild(list);
       library.appendChild(section);
@@ -138,8 +150,8 @@
       .catch(function (err) {
         var text =
           err && err.message === "malformed"
-            ? "The activity list could not be read because the settings file is not valid. Please let your instructor know."
-            : "The activity list could not be loaded. Check your connection and reload the page. If the problem continues, please let your instructor know.";
+            ? "The list of cases could not be read because the settings file is not valid. Please let your instructor know."
+            : "The list of cases could not be loaded. Check your connection and reload the page. If the problem continues, please let your instructor know.";
         showMessage(text, true);
       });
   }

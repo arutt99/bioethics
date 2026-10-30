@@ -149,8 +149,8 @@ Each entry in `docs/data/activities.json` looks like this:
 
 | `status` | On the homepage | What it means |
 | --- | --- | --- |
-| `available` | Card with **Open activity** and **Access code required** | The code prompt is reachable. Students still need the code. |
-| `coming-soon` | Card with **Coming soon**, no link | Display only. |
+| `available` | Folder with **Open case** and an **Access code required** stamp | The code prompt is reachable. Students still need the code. |
+| `coming-soon` | Folder with a **Coming soon** stamp, no link | Display only. |
 | `hidden` | Not shown | Display only. |
 
 `coming-soon` and `hidden` only change the homepage. A file in `docs/activities/` can still be opened by anyone who knows its address, which is why every published activity must be encrypted.
