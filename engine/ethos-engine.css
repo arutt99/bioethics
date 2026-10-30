@@ -685,16 +685,17 @@ main .sheet-band {
 .chart-fields {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
-  gap: 1px;
   margin: 16px 0;
   border: 1px solid var(--chart-rule);
   border-radius: 4px;
   overflow: hidden;
-  background: var(--chart-rule);
+  background: var(--paper);
 }
 .chart-fields div {
   padding: 8px 12px;
-  background: var(--paper);
+  margin: 0 -1px -1px 0;
+  border-right: 1px solid var(--chart-rule);
+  border-bottom: 1px solid var(--chart-rule);
 }
 @media (max-width: 480px) {
   .chart-fields {
@@ -930,6 +931,11 @@ input[type="text"]:focus {
   border-radius: var(--radius);
   padding: 8px;
 }
+.field-note {
+  margin: 6px 0 0;
+  font-size: 0.9375rem;
+  color: var(--attention);
+}
 .field-error {
   margin: 4px 0;
   color: var(--error);
@@ -978,6 +984,55 @@ input[type="text"]:focus {
   border-radius: 0 var(--radius) var(--radius) 0;
   padding: 12px;
   margin: 4px 0 0;
+}
+
+/* The consult note: a progress note for the chart. */
+.consult-note {
+  margin: 16px 0;
+  border: 1px solid var(--chart-rule);
+  border-radius: 4px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.consult-note .sheet-band {
+  margin: 0;
+  background: var(--chart-ink);
+}
+.consult-note-body {
+  padding: 4px 20px 16px;
+}
+.chart-fields.note-head {
+  margin: 16px 0 4px;
+  grid-template-columns: 1fr 1fr;
+}
+.consult-note .field {
+  margin: 18px 0 0;
+}
+.consult-note .field > label {
+  font-size: 0.875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--chart-ink);
+}
+main .word-count {
+  max-width: none;
+}
+.word-count {
+  margin: 16px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+  font-size: 0.9375rem;
+  color: var(--ink-muted);
+}
+.word-count.over {
+  color: var(--attention);
+  font-weight: 600;
+}
+@media (max-width: 480px) {
+  .consult-note-body {
+    padding: 4px 12px 12px;
+  }
 }
 
 /* Students' own options: index cards. */
@@ -1177,6 +1232,7 @@ input[type="text"]:focus {
   .sheet,
   .sheet-band,
   .notepad,
+  .consult-note,
   .option-card,
   .progress {
     border: 1px solid CanvasText;

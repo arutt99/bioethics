@@ -297,7 +297,7 @@
   function sectionPrompts(section) {
     var ids = [];
     section.blocks.forEach(function (b) {
-      if (b.type === "prompts") ids = ids.concat(b.ids);
+      if (b.type === "prompts" || b.type === "consultNote") ids = ids.concat(b.ids);
       if (b.type === "options") {
         listIds(b.id).forEach(function (uid) {
           ids.push(b.id + "." + uid + ".name");
@@ -763,6 +763,8 @@
         return renderOptions(block);
       case "optionFields":
         return renderOptionFields(block);
+      case "consultNote":
+        return renderConsultNote(block);
       default:
         return null;
     }
@@ -969,6 +971,61 @@
     return el("section", null, nodes);
   }
 
+  // The note the committee leaves in the chart for the clinician who asked. A word
+  // count guides its length but never blocks the student.
+  function noteFrom(block) {
+    var team = value("team.name").trim();
+    return (block.from || "Clinical Ethics Committee") + (team ? " · " + team : "");
+  }
+
+  function renderConsultNote(block) {
+    var limit = block.wordLimit || 250;
+    var nodes = [el("h3", { text: block.heading || "Write the consult note" })];
+    paragraphs(
+      block.intro || [
+        "Write the note the committee would leave in the chart for " +
+          (block.to || "the clinician who asked for this consultation") +
+          ". Keep it short and plain: they should be able to act on it in two minutes.",
+      ]
+    ).forEach(function (n) {
+      nodes.push(n);
+    });
+    var counter = el("p", { className: "word-count", id: "note-word-count" });
+    var wasOver = null;
+    function update() {
+      var n = block.ids.reduce(function (sum, id) {
+        var t = value(id).trim();
+        return sum + (t ? t.split(/\s+/).length : 0);
+      }, 0);
+      var over = n > limit;
+      counter.textContent = over
+        ? "Note length: " + n + " words. That is over the " + limit + "-word guide; a busy clinician may not read it all."
+        : "Note length: " + n + (n === 1 ? " word" : " words") + " (aim for " + limit + " or fewer).";
+      counter.className = "word-count" + (over ? " over" : "");
+      if (wasOver !== null && over !== wasOver) announce(over ? "The note is now over " + limit + " words." : "The note is back within " + limit + " words.");
+      wasOver = over;
+    }
+    var head = el("dl", { className: "chart-fields note-head" }, [
+      el("div", null, [el("dt", { text: "To" }), el("dd", { text: block.to || "Requesting clinician" })]),
+      el("div", null, [el("dt", { text: "From" }), el("dd", { text: noteFrom(block) })]),
+      el("div", null, [el("dt", { text: "Re" }), el("dd", { text: block.re })]),
+      el("div", null, [el("dt", { text: "Date" }), el("dd", { text: new Date().toLocaleDateString() })]),
+    ]);
+    var body = el("div", { className: "consult-note-body" }, [head]);
+    block.ids.forEach(function (id) {
+      body.appendChild(renderPrompt(id));
+    });
+    body.appendChild(counter);
+    var note = el("section", { className: "consult-note", "aria-label": "Ethics consultation note" }, [
+      el("p", { className: "sheet-band" }, [el("span", { text: "Ethics consultation note" }), el("span", { text: "For the chart" })]),
+      body,
+    ]);
+    note.addEventListener("input", update);
+    update();
+    nodes.push(note);
+    return el("section", null, nodes);
+  }
+
   function addOption(block) {
     var uid = newUid();
     state.lists[block.id] = listIds(block.id).concat([uid]);
@@ -1142,6 +1199,7 @@
     if (p.requiredIf) {
       field.setAttribute("data-depends", p.requiredIf.prompt);
       field.hidden = !isRequired(p) && !value(id);
+      markCondition(field, p);
     }
     if (help) {
       var target = field.querySelector("textarea, input[type=text], fieldset");
@@ -1156,7 +1214,24 @@
       var p = PROMPTS[deps[i].getAttribute("data-prompt")];
       deps[i].hidden = !isRequired(p) && !value(p.id);
       if (deps[i].hidden) fieldError(deps[i], null);
+      markCondition(deps[i], p);
     }
+  }
+
+  // A conditional answer stays on screen after its choice changes, so nothing written is
+  // lost, but it is left out of the report and says so.
+  function markCondition(field, p) {
+    var old = field.querySelector(".field-note");
+    if (old) old.remove();
+    if (isRequired(p) || !value(p.id)) return;
+    var src = PROMPTS[p.requiredIf.prompt];
+    var opt = src && src.type === "choice" ? optionById(src, p.requiredIf.equals) : null;
+    field.appendChild(
+      el("p", {
+        className: "field-note",
+        text: "Left out of your report unless you choose “" + (opt ? opt.title : p.requiredIf.equals) + "”. Delete it if you no longer need it.",
+      })
+    );
   }
 
   // ---------- Report ----------
@@ -1172,12 +1247,20 @@
       );
     });
     var sections = config.sections.map(function (sec) {
+      // A consult note opens with its addressing lines.
+      var head = sec.note
+        ? [
+            { label: "To", answer: sec.note.to || "Requesting clinician", note: null, missing: "" },
+            { label: "From", answer: noteFrom(sec.note), note: null, missing: "" },
+            { label: "Re", answer: sec.note.re || CASE.title, note: null, missing: "" },
+          ]
+        : [];
       return {
         title: sec.title,
-        items: (sec.ids || [])
+        items: head.concat((sec.ids || [])
           .filter(function (id) {
-            // Skip conditional prompts that did not apply.
-            return PROMPTS[id] && (value(id) || !PROMPTS[id].requiredIf || isRequired(PROMPTS[id]));
+            // Skip conditional prompts that do not apply, even if they still hold text.
+            return PROMPTS[id] && (!PROMPTS[id].requiredIf || isRequired(PROMPTS[id]));
           })
           .map(function (id) {
             var p = PROMPTS[id];
@@ -1188,7 +1271,7 @@
               missing: sec.earlier && !haveEarlier ? "[Not on this device. See your record from the earlier part.]" : "[No response]",
             };
           })
-          .concat(listItems(sec.lists || [])),
+          .concat(listItems(sec.lists || []))),
       };
     });
     // Case-file notes are optional, so only the ones written appear.

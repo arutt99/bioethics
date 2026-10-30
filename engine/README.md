@@ -76,7 +76,7 @@ A case file is an ES module (`export default { ... }`) or JSON.
 | `caseFile` | Optional `{ heading, intro[], step, navLabel }`. `heading` and `intro` appear above the tiles (for example, roundtable instructions). `step` makes the case file a numbered step; `navLabel` is its name in the navigation column. Can be set per part |
 | `items` | The case file: `{ id: item }`. See below |
 | `worksheet` | Written sections: `[{ id, title, introduction[], blocks[], step }]`. Sections are numbered in order; `step` repeats an earlier number, for a follow-up such as "6 Assess the consequences" in a later part. Use it only on the last sections |
-| `prompts` | `{ id: { type: textarea\|text\|choice\|listChoice, label, shortLabel, help, required, requiredIf: { prompt, equals }, options, restateLabel, rows } }`. `team.name` and `team.members` are added if missing |
+| `prompts` | `{ id: { type: textarea\|text\|choice\|listChoice, label, shortLabel, help, required, requiredIf: { prompt, equals }, options, restateLabel, rows } }`. `team.name` and `team.members` are added if missing. A `requiredIf` prompt appears only when its condition holds. If a student changes the choice after writing, the text stays on screen, labelled as left out of the report |
 | `optionSets` | `{ name: [{ id, title, description }] }` |
 | `perspectives` | `{ optionId: { addresses[], leavesOpen[] } }`, shown in a `perspectives` block |
 | `report` | For a single-file case: `{ title, heading, intro[], filename, downloadLabel, sections[{ title, ids[], lists[], earlier? }] }`. `lists` names `options` blocks; each named option appears with everything written for it |
@@ -128,9 +128,13 @@ dementia: {
 | --- | --- |
 | `options` | Students list their own options. `{ id, heading, intro[], fields[{ key, label, help }], min (default 2), max (default 6), required, addLabel, reportLabel, nameLabel, nameHelp }`. An option is a course of action someone in the case could take, such as "tell the truth" or "shade the truth". Each one has a name plus these fields. The name's help text defaults to "A course of action someone in the case could take, in a few words." Set `nameHelp` to give a case-specific example |
 | `optionFields` | More fields for each named option from an `options` block, in a later step. `{ list, heading, intro[], fields[{ key, label }], required }` |
+| `dissent` | The committee vote. Write just `{ type: "dissent" }`, usually in step 5. Students choose Unanimous or Not unanimous. Not unanimous opens a required **Minority view**: the dissenting position, its strongest reason, and what would change the majority's mind. Optional `heading`, `intro`, `required` |
+| `consultNote` | The note the committee leaves in the chart for the clinician who asked, usually in step 6. `{ to, from, re, wordLimit, heading, intro, fields, required }`. `to` is the requesting clinician (for example "Dr. A. Rivera, attending"); `from` defaults to "Clinical Ethics Committee" plus the team name; `re` defaults to the case title. The default fields are ethical question, relevant facts, recommendation, reasons, and next steps and follow-up. A word count guides length (default 250 words) but never blocks |
 | `perspectives` | Either `{ heading, intro[], prompt }` for a `choice` prompt (shows the chosen option and the rest), or `{ heading, intro[], after, options }` to show an option set only once the prompt named by `after` is answered |
 
-A `listChoice` prompt (`{ type: "listChoice", list: "<options block id>" }`) offers the student's own named options as radio buttons. An `options` block, its `optionFields`, and any `listChoice` from it must be in the same part, and a `listChoice` can't be carried forward. Carry forward the written defense instead. So split a case into parts before step 3 or after step 5, not in between.
+A `listChoice` prompt (`{ type: "listChoice", list: "<options block id>" }`) offers the student's own named options as radio buttons. A case can have one `dissent` and one `consultNote`. Both always reach the report without being listed: the consult note opens the report of its part and the final report, and the committee vote closes them. List their ids in a report section yourself (`committee.vote`, `committee.dissent`, `note.question`, and so on) to place them elsewhere.
+
+An `options` block, its `optionFields`, and any `listChoice` from it must be in the same part, and a `listChoice` can't be carried forward. Carry forward the written defense instead. So split a case into parts before step 3 or after step 5, not in between.
 
 Use stable prompt ids. Answers are saved by id, so renaming a label is safe but reusing an id for a different question attaches old answers to it.
 
@@ -165,10 +169,18 @@ export default {
       title: "Choose a course of action and defend it",
       blocks: [
         { type: "prompts", ids: ["choice", "defense", "objection"] },
+        { type: "dissent" },
         { type: "perspectives", heading: "Options others have considered", after: "choice", options: "case-options" },
       ],
     },
-    { id: "act", title: "Carry out the chosen action", blocks: [{ type: "prompts", ids: ["plan", "watch-for"] }] },
+    {
+      id: "act",
+      title: "Carry out the chosen action",
+      blocks: [
+        { type: "consultNote", to: "Dr. A. Rivera, attending physician, 4 West" },
+        { type: "prompts", ids: ["plan", "watch-for"] },
+      ],
+    },
   ],
   prompts: {
     choice: { type: "listChoice", list: "opts", label: "Which of your options do you choose?", shortLabel: "Chosen option", required: true },

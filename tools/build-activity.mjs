@@ -62,6 +62,60 @@ const optionSets = source.optionSets || {};
 prompts["team.name"] ||= { type: "text", label: "Team name", shortLabel: "Team" };
 prompts["team.members"] ||= { type: "text", label: "Team members", help: "First and last names, separated by commas." };
 
+// ---------- Standard blocks ----------
+// Two blocks every case can use with one line, written the same way in every case:
+//   { type: "dissent" }      the committee vote, with a minority view when it isn't unanimous
+//   { type: "consultNote" }  the note the committee leaves in the chart for the clinician who asked
+const NOTE_FIELDS = [
+  { key: "question", label: "Ethical question", help: "One sentence." },
+  { key: "facts", label: "Relevant facts", help: "Only the facts the recommendation depends on." },
+  { key: "recommendation", label: "Recommendation", help: "What the committee recommends, in plain words." },
+  { key: "reasons", label: "Reasons", help: "The main reasons, and the strongest concern you weighed against them." },
+  { key: "followup", label: "Next steps and follow-up", help: "Who does what next, and when the committee will check back." },
+];
+const standardBlocks = []; // [kind, section id, block]
+for (const s of source.worksheet || []) {
+  s.blocks = (s.blocks || []).map((b) => {
+    if (b.type === "dissent") {
+      optionSets["committee-vote"] ||= [
+        { id: "unanimous", title: "Unanimous", description: "Every member of the committee supports the recommendation." },
+        { id: "divided", title: "Not unanimous", description: "At least one member disagrees. Record the minority view." },
+      ];
+      prompts["committee.vote"] ||= { type: "choice", options: "committee-vote", label: "Did the committee agree on the recommendation?", shortLabel: "Committee vote", required: b.required !== false };
+      prompts["committee.dissent"] ||= {
+        type: "textarea",
+        label: "Minority view",
+        shortLabel: "Minority view",
+        help: "State the dissenting position and its strongest reason, and what would have to change for the majority to agree. Name members only if they want to be named.",
+        requiredIf: { prompt: "committee.vote", equals: "divided" },
+        rows: 5,
+      };
+      const out = {
+        type: "prompts",
+        heading: b.heading || "Committee vote",
+        intro: b.intro || "Real ethics committees record disagreement. A minority view is part of the record, not a failure to agree.",
+        ids: ["committee.vote", "committee.dissent"],
+      };
+      standardBlocks.push(["dissent", s.id, out]);
+      return out;
+    }
+    if (b.type === "consultNote") {
+      const fields = b.fields || NOTE_FIELDS;
+      for (const f of fields) {
+        need(/^[a-z0-9-]+$/.test(f.key || "") && f.label, `section ${s.id}: each consultNote field needs a lowercase "key" and a "label"`);
+        prompts[`note.${f.key}`] ||= { type: "textarea", label: f.label, help: f.help, shortLabel: f.label, rows: f.rows || 3, required: b.required !== false };
+      }
+      const out = { ...b, fields, ids: fields.map((f) => `note.${f.key}`), re: b.re || source.title };
+      standardBlocks.push(["consultNote", s.id, out]);
+      return out;
+    }
+    return b;
+  });
+}
+for (const kind of ["dissent", "consultNote"]) {
+  need(standardBlocks.filter(([k]) => k === kind).length <= 1, `a case can have only one "${kind}" block`);
+}
+
 for (const [id, it] of Object.entries(items)) {
   need(/^[a-z0-9][a-z0-9-]*$/.test(id), `item ${id}: ids use lowercase letters, numbers and hyphens`);
   need(KINDS.includes(it.kind), `item ${id}: kind must be one of ${KINDS.join(", ")}`);
@@ -75,7 +129,7 @@ for (const [id, p] of Object.entries(prompts)) {
   if (p.type === "choice") need(optionSets[p.options], `prompt ${id}: unknown option set "${p.options}"`);
   if (p.requiredIf) need(prompts[p.requiredIf.prompt], `prompt ${id}: requiredIf points to unknown prompt`);
 }
-const BLOCKS = ["text", "callout", "list", "quote", "record", "items", "concepts", "prompts", "options", "optionFields", "carryForward", "trajectory", "perspectives"];
+const BLOCKS = ["text", "callout", "list", "quote", "record", "items", "concepts", "prompts", "options", "optionFields", "consultNote", "carryForward", "trajectory", "perspectives"];
 // Option lists students write themselves ("options" blocks), by block id.
 const listBlocks = {};
 const sectionOfList = {};
@@ -145,6 +199,18 @@ if (partsList.length) {
   }
 } else {
   need(source.report && source.report.sections, "missing report");
+}
+// The committee vote and the consult note always reach the report: the report of their
+// own part, and the final report. A case that places them itself is left alone.
+for (const [kind, sid, b] of standardBlocks) {
+  const owner = partsList.findIndex((p) => (p.worksheet || []).includes(sid));
+  const reports = partsList.length ? [...new Set([owner, partsList.length - 1])].filter((i) => i >= owner).map((i) => [i, partsList[i] && partsList[i].report]) : [[0, source.report]];
+  for (const [i, r] of reports) {
+    if (!r || !r.sections || r.sections.some((sec) => (sec.ids || []).some((id) => b.ids.includes(id)))) continue;
+    const earlier = partsList.length > 0 && i !== owner;
+    if (kind === "dissent") r.sections.push({ title: "Committee vote", ids: b.ids, earlier });
+    else r.sections.unshift({ title: "Ethics consultation note", ids: b.ids, earlier, note: { to: b.to || null, from: b.from || "Clinical Ethics Committee", re: b.re } });
+  }
 }
 for (const r of [source.report, ...partsList.map((p) => p.report)]) {
   for (const sec of (r && r.sections) || []) {
@@ -216,7 +282,7 @@ function assemble(part, partIndex) {
 
   for (const s of sections) {
     for (const b of s.blocks) {
-      if (b.type === "prompts" || b.type === "carryForward") b.ids.forEach((id) => usedPrompts.add(id));
+      if (b.type === "prompts" || b.type === "carryForward" || b.type === "consultNote") b.ids.forEach((id) => usedPrompts.add(id));
       if (b.type === "trajectory") b.steps.forEach((st) => st.ids.forEach((id) => usedPrompts.add(id)));
       if (b.type === "perspectives") {
         usesPerspectives = true;

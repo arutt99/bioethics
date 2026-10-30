@@ -161,3 +161,18 @@ Date: 2026-10-30. Visual redesign of the homepage, the code prompt, and the engi
 
 - The published activities still use the previous code prompt until they are encrypted again with the new template
 - Windows high-contrast mode on a real machine, Safari and Firefox, a screen reader pass
+
+# Verification record: committee vote and consult note
+
+Date: 2026-10-30. Same throwaway three-part case with `{ type: "dissent" }` in step 5 (Part 1) and a `consultNote` in step 6 (Part 2). Chromium (Playwright). Earlier suites re-run: 39, 27, and 11 checks pass.
+
+| Check | Result |
+| --- | --- |
+| Committee vote appears; Minority view opens only for Not unanimous and is then required (listed as missing, link focuses it) | Pass |
+| Switching back to Unanimous keeps the written minority view on screen, labelled as left out of the report, and leaves it out of the report | Pass |
+| Part 1 report closes with the committee vote and minority view without the case listing them | Pass |
+| Consult note addressed To the requesting clinician, From the committee (with the team name in the report), Re the case, dated | Pass |
+| Word count updates as students type, warns past the guide, and announces crossing it once; never blocks | Pass |
+| Consult note opens the Part 2 report and the final Part 3 report; the committee vote carries into the final report | Pass |
+| The consult note's addressee is not in the Part 1 file | Pass |
+| Report text escaped; no horizontal scrolling at 375 px; no console errors | Pass |
