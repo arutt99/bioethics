@@ -7,9 +7,10 @@
 // private. The output folder must be OUTSIDE this repository: the built files are
 // originals, and must be encrypted with tools/encrypt-activity.sh before publishing.
 //
-// A case with "parts" produces one file per part. Each part file contains only that
-// part's stages, stakeholders, evidence and prompts, plus the labels of earlier answers
-// it carries forward. The build fails if later content leaks into an earlier part.
+// A case with "parts" produces one file per part. Each part file contains its own
+// worksheet sections and prompts, the case-file items released so far, and the labels
+// of earlier answers it carries forward. The build fails if later content leaks into
+// an earlier part.
 import { readFileSync, writeFileSync, mkdirSync, realpathSync, existsSync } from "node:fs";
 import { join, dirname, resolve, extname, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -44,15 +45,29 @@ const errors = [];
 const need = (cond, msg) => {
   if (!cond) errors.push(msg);
 };
-need(source.schemaVersion === 1, "schemaVersion must be 1");
+if (source.schemaVersion === 1) {
+  fail("this case uses the old guided format (schemaVersion 1). Convert it first:\n  node tools/migrate-case.mjs <old-case.mjs> <new-case.mjs>");
+}
+need(source.schemaVersion === 2, "schemaVersion must be 2");
 need(/^[a-z0-9][a-z0-9-]*$/.test(source.id || ""), "id must use lowercase letters, numbers and hyphens");
-for (const k of ["version", "title", "stages", "prompts"]) need(source[k], `missing "${k}"`);
+for (const k of ["version", "title", "items", "worksheet", "prompts"]) need(source[k], `missing "${k}"`);
 need(source.start || ((source.parts || []).length && source.parts.every((p) => p.start)), 'missing "start" (on the case, or on every part)');
-const stageById = Object.fromEntries((source.stages || []).map((s) => [s.id, s]));
-const stakeholders = source.stakeholders || {};
-const evidence = source.evidence || {};
+
+const KINDS = ["record", "person", "background", "policy"];
+const items = source.items || {};
+const sectionById = Object.fromEntries((source.worksheet || []).map((s) => [s.id, s]));
 const prompts = source.prompts || {};
 const optionSets = source.optionSets || {};
+// Every report asks for a team name and members; supply plain defaults.
+prompts["team.name"] ||= { type: "text", label: "Team name", shortLabel: "Team" };
+prompts["team.members"] ||= { type: "text", label: "Team members", help: "First and last names, separated by commas." };
+
+for (const [id, it] of Object.entries(items)) {
+  need(/^[a-z0-9][a-z0-9-]*$/.test(id), `item ${id}: ids use lowercase letters, numbers and hyphens`);
+  need(KINDS.includes(it.kind), `item ${id}: kind must be one of ${KINDS.join(", ")}`);
+  need(it.title, `item ${id}: missing title`);
+  for (const q of it.questions || []) need(q.question && Array.isArray(q.answer), `item ${id}: each question needs "question" and "answer" (a list of paragraphs)`);
+}
 for (const [id, p] of Object.entries(prompts)) {
   p.id = id;
   need(["textarea", "text", "choice"].includes(p.type), `prompt ${id}: unknown type "${p.type}"`);
@@ -60,21 +75,58 @@ for (const [id, p] of Object.entries(prompts)) {
   if (p.type === "choice") need(optionSets[p.options], `prompt ${id}: unknown option set "${p.options}"`);
   if (p.requiredIf) need(prompts[p.requiredIf.prompt], `prompt ${id}: requiredIf points to unknown prompt`);
 }
-for (const s of source.stages || []) {
+const BLOCKS = ["text", "callout", "list", "quote", "record", "items", "concepts", "prompts", "carryForward", "trajectory", "perspectives"];
+for (const s of source.worksheet || []) {
+  need(/^[a-z0-9][a-z0-9-]*$/.test(s.id || ""), `worksheet section "${s.id}": ids use lowercase letters, numbers and hyphens`);
+  need(s.title, `worksheet section ${s.id}: missing title`);
   for (const b of s.blocks || []) {
+    need(BLOCKS.includes(b.type), `section ${s.id}: unknown block type "${b.type}"`);
     for (const id of b.ids || []) {
-      if (b.type === "stakeholders") need(stakeholders[id], `stage ${s.id}: unknown stakeholder "${id}"`);
-      else if (b.type === "evidence") need(evidence[id], `stage ${s.id}: unknown evidence "${id}"`);
-      else if (["prompts", "carryForward"].includes(b.type)) need(prompts[id], `stage ${s.id}: unknown prompt "${id}"`);
+      if (b.type === "items") need(items[id], `section ${s.id}: unknown item "${id}"`);
+      else if (["prompts", "carryForward"].includes(b.type)) need(prompts[id], `section ${s.id}: unknown prompt "${id}"`);
     }
+    if (b.type === "trajectory") for (const st of b.steps) for (const id of st.ids) need(prompts[id], `section ${s.id}: unknown prompt "${id}"`);
+    if (b.type === "perspectives") need(prompts[b.prompt] && prompts[b.prompt].type === "choice", `section ${s.id}: perspectives needs a choice prompt`);
   }
 }
-for (const p of source.parts || []) {
-  for (const id of p.stages) need(stageById[id], `part ${p.id}: unknown stage "${id}"`);
+const partsList = source.parts || [];
+for (const p of partsList) {
+  for (const id of p.worksheet || []) need(sectionById[id], `part ${p.id}: unknown worksheet section "${id}"`);
+  for (const id of p.items || []) need(items[id], `part ${p.id}: unknown item "${id}"`);
   need(/^[a-z0-9][a-z0-9-]*\.html$/.test(p.file || ""), `part ${p.id}: "file" must be a lowercase .html name`);
   need(p.report && p.report.sections, `part ${p.id}: missing report`);
 }
+if (partsList.length) {
+  // Each item and each section belongs to exactly one part.
+  for (const [what, all, key] of [["item", Object.keys(items), "items"], ["worksheet section", Object.keys(sectionById), "worksheet"]]) {
+    for (const id of all) {
+      const owners = partsList.filter((p) => (p[key] || []).includes(id)).length;
+      need(owners === 1, `${what} "${id}" must be listed in exactly one part (found ${owners})`);
+    }
+  }
+} else {
+  need(source.report && source.report.sections, "missing report");
+}
+for (const r of [source.report, ...partsList.map((p) => p.report)]) {
+  for (const sec of (r && r.sections) || []) for (const id of sec.ids) need(prompts[id], `report section "${sec.title}": unknown prompt "${id}"`);
+}
 if (errors.length) fail(`case file has problems:\n  ${errors.join("\n  ")}`);
+
+// ---------- Number the case-file items ----------
+
+// Items are numbered in the order they are released: Part 1's items first, grouped
+// by kind, then each later part's. A number stays the same in every part.
+const releases = partsList.length ? partsList.map((p) => p.items || []) : [Object.keys(items)];
+const itemOrder = [];
+const releasedIn = {};
+releases.forEach((ids, partIndex) => {
+  const sorted = [...ids].sort((a, b) => KINDS.indexOf(items[a].kind) - KINDS.indexOf(items[b].kind));
+  for (const id of sorted) {
+    releasedIn[id] = partIndex;
+    itemOrder.push(id);
+  }
+});
+const numberOf = Object.fromEntries(itemOrder.map((id, i) => [id, i + 1]));
 
 // ---------- Assemble one file ----------
 
@@ -96,35 +148,32 @@ function strings(value, acc = []) {
 }
 
 function assemble(part, partIndex) {
-  const stageIds = part ? part.stages : source.stages.map((s) => s.id);
-  const stages = stageIds.map((id) => stageById[id]);
+  const sectionIds = part ? part.worksheet : source.worksheet.map((s) => s.id);
+  const sections = sectionIds.map((id) => sectionById[id]);
+  // The case file grows: a part shows its own items and every earlier part's.
+  const fileItems = itemOrder.filter((id) => !part || releasedIn[id] <= partIndex);
   const usedPrompts = new Set();
-  const usedStakeholders = new Set();
-  const usedEvidence = new Set();
   let usesPerspectives = false;
   const report = part ? part.report : source.report;
 
-  for (const s of stages) {
+  for (const s of sections) {
     for (const b of s.blocks) {
-      if (b.type === "stakeholders") b.ids.forEach((id) => usedStakeholders.add(id));
-      if (b.type === "evidence") b.ids.forEach((id) => usedEvidence.add(id));
       if (b.type === "prompts" || b.type === "carryForward") b.ids.forEach((id) => usedPrompts.add(id));
       if (b.type === "trajectory") b.steps.forEach((st) => st.ids.forEach((id) => usedPrompts.add(id)));
       if (b.type === "perspectives") {
         usesPerspectives = true;
         usedPrompts.add(b.prompt);
       }
-      if (b.type === "report") (b.teamFields || []).forEach((id) => usedPrompts.add(id));
+      if (b.type === "items") for (const id of b.ids) if (!fileItems.includes(id)) fail(`section ${s.id} points to item "${id}", which is not released until a later part`);
     }
   }
-  for (const sid of usedStakeholders) if (prompts[`notes.${sid}`]) usedPrompts.add(`notes.${sid}`);
-  for (const sec of report.sections) sec.ids.forEach((id) => prompts[id] && usedPrompts.add(id));
-  for (const id of ["team.name", "team.members"]) if (prompts[id]) usedPrompts.add(id);
-  for (const id of [...usedPrompts]) if (prompts[id] && prompts[id].requiredIf) usedPrompts.add(prompts[id].requiredIf.prompt);
+  for (const id of fileItems) if (prompts[`notes.${id}`]) usedPrompts.add(`notes.${id}`);
+  for (const sec of report.sections) sec.ids.forEach((id) => usedPrompts.add(id));
+  for (const id of ["team.name", "team.members"]) usedPrompts.add(id);
+  for (const id of [...usedPrompts]) if (prompts[id].requiredIf) usedPrompts.add(prompts[id].requiredIf.prompt);
 
   const pick = (obj, ids) => Object.fromEntries([...ids].filter((id) => obj[id]).map((id) => [id, obj[id]]));
   const usedOptionSets = new Set([...usedPrompts].map((id) => prompts[id].options).filter(Boolean));
-  const partsList = source.parts || [];
 
   const data = stripNotes({
     schemaVersion: source.schemaVersion,
@@ -133,16 +182,17 @@ function assemble(part, partIndex) {
     title: source.title,
     versionNote: source.versionNote || null,
     start: (part && part.start) || source.start,
+    caseFile: (part && part.caseFile) || source.caseFile || null,
     part: part
       ? { id: part.id, label: part.label, order: partIndex, last: partIndex === partsList.length - 1, end: part.end || null }
       : null,
-    outline: source.stages.map((s) => {
-      const owner = partsList.findIndex((p) => p.stages.includes(s.id));
-      return { id: s.id, number: s.number, title: s.title, partLabel: owner >= 0 ? partsList[owner].label : null, partOrder: owner };
+    outline: source.worksheet.map((s, i) => {
+      const owner = partsList.findIndex((p) => p.worksheet.includes(s.id));
+      return { id: s.id, number: i + 1, title: s.title, partLabel: owner >= 0 ? partsList[owner].label : null, partOrder: owner };
     }),
-    stages,
-    stakeholders: pick(stakeholders, usedStakeholders),
-    evidence: pick(evidence, usedEvidence),
+    worksheet: sections,
+    items: Object.fromEntries(fileItems.map((id) => [id, { ...items[id], number: numberOf[id], isNew: !!part && partIndex > 0 && releasedIn[id] === partIndex }])),
+    itemOrder: fileItems,
     prompts: pick(prompts, usedPrompts),
     optionSets: pick(optionSets, usedOptionSets),
     perspectives: usesPerspectives ? source.perspectives || {} : {},
@@ -152,12 +202,11 @@ function assemble(part, partIndex) {
   // Leak check: no text from content this file should not contain.
   const included = new Set(strings(data));
   const excluded = [];
-  for (const s of source.stages) if (!stageIds.includes(s.id)) excluded.push(...strings(s));
-  for (const [id, v] of Object.entries(stakeholders)) if (!usedStakeholders.has(id)) excluded.push(...strings(v));
-  for (const [id, v] of Object.entries(evidence)) if (!usedEvidence.has(id)) excluded.push(...strings(v));
+  for (const s of source.worksheet) if (!sectionIds.includes(s.id)) excluded.push(...strings(s));
+  for (const [id, v] of Object.entries(items)) if (!fileItems.includes(id)) excluded.push(...strings(v));
   for (const [id, v] of Object.entries(prompts)) if (!usedPrompts.has(id)) excluded.push(...strings(v));
   if (!usesPerspectives) excluded.push(...strings(source.perspectives || {}));
-  for (const p of partsList) if (p !== part) excluded.push(...strings([p.start, p.end]));
+  for (const p of partsList) if (p !== part) excluded.push(...strings([p.start, p.end, p.caseFile]));
   excluded.push(...collectNotes(source));
   const serialized = JSON.stringify(data);
   const leaks = [...new Set(excluded)].filter((t) => t.length >= 30 && !included.has(t) && serialized.includes(JSON.stringify(t).slice(1, -1)));
@@ -203,8 +252,6 @@ if (source.parts && source.parts.length) {
     console.log(`Built ${file}`);
   });
 } else {
-  need(source.report && source.report.sections, "missing report");
-  if (errors.length) fail(errors.join("\n"));
   const file = join(outAbs, `${source.id}.html`);
   writeFileSync(file, render(assemble(null, 0), source.title, eyebrow));
   console.log(`Built ${file}`);

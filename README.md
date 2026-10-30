@@ -24,11 +24,12 @@ docs/                      ← published by GitHub Pages
     demo-activity.html     ENCRYPTED files only
     nurse-code-part-1.html
     nurse-code-part-2.html
-engine/                    reusable six-stage consultation engine (no case content)
+engine/                    reusable case-file consultation engine (no case content)
 planning/                  design manual and build brief (not published to the site)
 .githooks/pre-commit       runs npm run check before each commit
 tools/
   build-activity.mjs       builds private activity pages from a private case file
+  migrate-case.mjs         converts an old guided-format case to the case-file format
   encrypt-activity.sh      encrypts one original into docs/activities/
   password_template.html   the styled code-entry screen
   check.mjs                pre-publish check (npm run check)
@@ -109,9 +110,11 @@ node tools/build-activity.mjs ~/ETHOS-private/cases/nurse-code.mjs ~/ETHOS-priva
 
 This writes one original per part into your private folder. Open them in a browser to review, then encrypt each with `tools/encrypt-activity.sh` as above.
 
+Cases written for the earlier guided version of the engine need converting once with `tools/migrate-case.mjs` (see [`engine/README.md`](engine/README.md)). The published nurse-code pages keep working as they are until you rebuild them.
+
 ### Cases released in parts
 
-A case split into parts (for example, so the evidence reveal opens when you choose) produces one file per part. Give each part its own unrelated passphrase. List each part in `activities.json`. Announce the Part 2 code when you want the reveal to open.
+A case split into parts (for example, so new information reaches the whole class at the same moment) produces one file per part. Each part's case file keeps the earlier items and adds its own, marked New. Give each part its own unrelated passphrase. List each part in `activities.json`. Announce the Part 2 code when you want the new information to arrive.
 
 Answers carry from Part 1 to Part 2 only in the same browser on the same device. Otherwise, students restate their provisional recommendation from their downloaded Part 1 record. Ask students to submit both the Part 1 record and the final report.
 

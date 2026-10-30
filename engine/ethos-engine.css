@@ -147,13 +147,28 @@ main.panel {
   margin: 0 0 8px;
   font-size: 1rem;
 }
-.progress ol {
+.progress ol,
+.progress ul {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 .progress li + li {
   margin-top: 4px;
+}
+.progress h3 {
+  margin: 16px 0 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.progress .nav-report {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
 }
 .step {
   display: flex;
@@ -175,7 +190,7 @@ button.step {
 button.step:hover {
   background: var(--tint);
 }
-.step[aria-current="step"] {
+.step[aria-current="page"] {
   border-color: var(--navy);
   background: var(--tint);
   font-weight: 600;
@@ -195,7 +210,7 @@ button.step:hover {
   border-color: var(--success);
   color: var(--success);
 }
-.step[aria-current="step"] .num {
+.step[aria-current="page"] .num {
   border-color: var(--navy);
   color: var(--navy);
 }
@@ -309,6 +324,84 @@ blockquote .source {
   }
 }
 
+main .role,
+main .source {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+/* Case file tiles */
+.tiles {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+}
+.tiles li {
+  max-width: none;
+}
+.tile {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--navy);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.tile:hover {
+  background: var(--tint);
+}
+.tile.read {
+  border-left-color: var(--border);
+}
+.tile-num {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--tint);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: var(--navy);
+}
+.tile-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tile-kind,
+.tile-status {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+.tile-title {
+  font-weight: 700;
+  color: var(--navy);
+}
+.tile-summary {
+  font-size: 0.9375rem;
+}
+.tile-status {
+  margin-top: 4px;
+}
+.tag.new {
+  margin: 0 8px 0 0;
+  color: var(--attention);
+}
+
 /* Cards and disclosures */
 .cards {
   display: grid;
@@ -328,7 +421,7 @@ blockquote .source {
   color: var(--text-muted);
   font-size: 0.9375rem;
 }
-.card .tag {
+.tag {
   display: inline-block;
   margin-left: 8px;
   padding: 0 8px;

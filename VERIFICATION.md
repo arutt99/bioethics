@@ -83,3 +83,35 @@ Date: 2026-10-29. StatiCrypt 3.5.4. Chromium (Playwright), served locally under 
 
 - Right-code decryption of the three published activities under the policy (their codes aren't in this environment). Test each one once after deploying.
 - Whether the policy stays in force after decryption in Firefox and Safari. If it doesn't, nothing breaks, but those browsers lose that extra layer.
+
+# Verification record: case-file engine
+
+Date: 2026-10-30. Engine rebuilt around a case file and an open worksheet (`schemaVersion: 2`). Tested with a throwaway two-part fictional case kept outside the repository, in Chromium (Playwright). The published nurse-code pages were not rebuilt; they still use the earlier engine until the private case is converted.
+
+| Check | Result |
+| --- | --- |
+| Opening screen shows Open the case file first | Pass |
+| Case file groups tiles by kind (records, people, medical background, policies), in any order, nothing required | Pass |
+| Medical background item shows the plain-language disclaimer | Pass |
+| Item numbers stay the same across parts; Part 2 shows new items first, marked New, with Part 1 items below | Pass |
+| Opened status carries between parts in the same browser | Pass |
+| Worksheet sections open in any order; status shows Not started, In progress, or Complete | Pass |
+| Report page lists missing required answers; each link moves focus to its field and shows an inline message that clears on typing | Pass |
+| Incomplete report can be downloaded and says how many answers were missing | Pass |
+| Case-file notes appear in the report, escaped | Pass |
+| Option comparison stays hidden until a recommendation is chosen | Pass |
+| Conditional field appears when its option is chosen and is listed as missing if empty | Pass |
+| Part 2 in a fresh browser asks students to restate earlier answers; report notes the restatement | Pass |
+| Part 1 file contains no Part 2 content; instructor notes removed | Pass |
+| Keyboard: tiles open with Enter, focus moves to the page heading | Pass |
+| No horizontal scrolling at 360 px wide | Pass |
+| No console or policy errors | Pass |
+| `tools/migrate-case.mjs` converts an old-format test case, and the result builds; the build refuses old-format cases with a pointer to the converter | Pass |
+| `npm run check` | Pass |
+
+## Not yet checked
+
+- The converted nurse-code case (the private case file isn't in this environment)
+- Encrypted copies of case-file pages on the live site
+- Screen reader pass, real phones, Safari and Firefox
+- Classroom timing for the roundtable format
