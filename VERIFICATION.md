@@ -115,3 +115,19 @@ Date: 2026-10-30. Engine rebuilt around a case file and an open worksheet (`sche
 - Encrypted copies of case-file pages on the live site
 - Screen reader pass, real phones, Safari and Firefox
 - Classroom timing for the roundtable format
+
+# Verification record: six-step method
+
+Date: 2026-10-30. Tested with a throwaway three-part fictional case built around the six steps (Part 1: steps 1 to 5; Part 2: new information and step 6 action plan; Part 3: follow-up and step 6 assessment), kept outside the repository. Chromium (Playwright). The earlier case-file checks were re-run and still pass.
+
+| Check | Result |
+| --- | --- |
+| Navigation lists the six steps in order, with the case file as step 2 and the follow-up as a second step 6 | Pass |
+| Step 3 starts with two empty options; Add focuses the new option; Remove asks first when there's text, and isn't offered below the minimum | Pass |
+| Step 4 shows each named option, by name, with its argument fields; before any option is named it points back to step 3 and shows Not started | Pass |
+| Step 5 offers the student's own options; renaming an option after choosing keeps the choice | Pass |
+| The case's own options stay hidden until a choice is made, then open on the same page | Pass |
+| Report lists each option with its consequences and arguments, and the chosen option by its current name; text escaped | Pass |
+| A Part 3 report includes the Part 1 option list in the same browser, and says "No options listed" in a fresh one | Pass |
+| No horizontal scrolling at 360 px; no console or policy errors | Pass |
+| `npm run check` | Pass |

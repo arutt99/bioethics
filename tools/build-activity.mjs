@@ -70,12 +70,45 @@ for (const [id, it] of Object.entries(items)) {
 }
 for (const [id, p] of Object.entries(prompts)) {
   p.id = id;
-  need(["textarea", "text", "choice"].includes(p.type), `prompt ${id}: unknown type "${p.type}"`);
+  need(["textarea", "text", "choice", "listChoice"].includes(p.type), `prompt ${id}: unknown type "${p.type}"`);
   need(p.label, `prompt ${id}: missing label`);
   if (p.type === "choice") need(optionSets[p.options], `prompt ${id}: unknown option set "${p.options}"`);
   if (p.requiredIf) need(prompts[p.requiredIf.prompt], `prompt ${id}: requiredIf points to unknown prompt`);
 }
-const BLOCKS = ["text", "callout", "list", "quote", "record", "items", "concepts", "prompts", "carryForward", "trajectory", "perspectives"];
+const BLOCKS = ["text", "callout", "list", "quote", "record", "items", "concepts", "prompts", "options", "optionFields", "carryForward", "trajectory", "perspectives"];
+// Option lists students write themselves ("options" blocks), by block id.
+const listBlocks = {};
+const sectionOfList = {};
+for (const s of source.worksheet || []) {
+  for (const b of s.blocks || []) {
+    if (b.type !== "options") continue;
+    need(/^[a-z0-9][a-z0-9-]*$/.test(b.id || ""), `section ${s.id}: an options block needs an id of lowercase letters, numbers and hyphens`);
+    need(!listBlocks[b.id] && !prompts[b.id], `options block "${b.id}": id is already used`);
+    need(Array.isArray(b.fields) && b.fields.every((f) => /^[a-z0-9-]+$/.test(f.key || "") && f.key !== "name" && f.label), `options block "${b.id}": each field needs a lowercase "key" (not "name") and a "label"`);
+    listBlocks[b.id] = b;
+    sectionOfList[b.id] = s.id;
+  }
+}
+for (const [id, p] of Object.entries(prompts)) {
+  if (p.type === "listChoice") need(listBlocks[p.list], `prompt ${id}: "list" must name an options block`);
+}
+// Every field an option can have, from its own block and any optionFields blocks, so
+// the engine can save, check and report them all.
+for (const b of Object.values(listBlocks)) b.allFields = b.fields.map((f) => ({ ...f, required: b.required !== false }));
+const fieldsBlocks = [];
+for (const s of source.worksheet || []) {
+  for (const b of s.blocks || []) {
+    if (b.type !== "optionFields") continue;
+    fieldsBlocks.push([s.id, b]);
+    need(listBlocks[b.list], `section ${s.id}: optionFields "list" must name an options block`);
+    need(Array.isArray(b.fields) && b.fields.every((f) => /^[a-z0-9-]+$/.test(f.key || "") && f.key !== "name" && f.label), `section ${s.id}: each optionFields field needs a lowercase "key" (not "name") and a "label"`);
+    if (!listBlocks[b.list] || !Array.isArray(b.fields)) continue;
+    for (const f of b.fields) {
+      need(!listBlocks[b.list].allFields.some((g) => g.key === f.key), `section ${s.id}: field "${f.key}" is already used for options in "${b.list}"`);
+      listBlocks[b.list].allFields.push({ ...f, required: b.required !== false });
+    }
+  }
+}
 for (const s of source.worksheet || []) {
   need(/^[a-z0-9][a-z0-9-]*$/.test(s.id || ""), `worksheet section "${s.id}": ids use lowercase letters, numbers and hyphens`);
   need(s.title, `worksheet section ${s.id}: missing title`);
@@ -86,7 +119,13 @@ for (const s of source.worksheet || []) {
       else if (["prompts", "carryForward"].includes(b.type)) need(prompts[id], `section ${s.id}: unknown prompt "${id}"`);
     }
     if (b.type === "trajectory") for (const st of b.steps) for (const id of st.ids) need(prompts[id], `section ${s.id}: unknown prompt "${id}"`);
-    if (b.type === "perspectives") need(prompts[b.prompt] && prompts[b.prompt].type === "choice", `section ${s.id}: perspectives needs a choice prompt`);
+    if (b.type === "perspectives" && b.after) {
+      need(prompts[b.after], `section ${s.id}: perspectives "after" points to unknown prompt "${b.after}"`);
+      need(optionSets[b.options], `section ${s.id}: perspectives "options" must name an option set`);
+    } else if (b.type === "perspectives") {
+      need(prompts[b.prompt] && prompts[b.prompt].type === "choice", `section ${s.id}: perspectives needs a choice prompt, or "after" and "options"`);
+    }
+    if (b.type === "carryForward") for (const id of b.ids) need(!prompts[id] || prompts[id].type !== "listChoice", `section ${s.id}: a list choice can't be carried forward; carry forward the written justification instead`);
   }
 }
 const partsList = source.parts || [];
@@ -108,8 +147,26 @@ if (partsList.length) {
   need(source.report && source.report.sections, "missing report");
 }
 for (const r of [source.report, ...partsList.map((p) => p.report)]) {
-  for (const sec of (r && r.sections) || []) for (const id of sec.ids) need(prompts[id], `report section "${sec.title}": unknown prompt "${id}"`);
+  for (const sec of (r && r.sections) || []) {
+    for (const id of sec.ids || []) need(prompts[id], `report section "${sec.title}": unknown prompt "${id}"`);
+    for (const id of sec.lists || []) need(listBlocks[id], `report section "${sec.title}": unknown options block "${id}"`);
+  }
 }
+// A list choice, and any extra option fields, must be in the same part as their list.
+const partOfSection = (sid) => partsList.findIndex((p) => (p.worksheet || []).includes(sid));
+for (const [sid, b] of fieldsBlocks) {
+  if (listBlocks[b.list]) need(partOfSection(sid) === partOfSection(sectionOfList[b.list]), `section ${sid}: optionFields must be in the same part as options block "${b.list}"`);
+}
+for (const s of source.worksheet || []) {
+  for (const b of s.blocks || []) {
+    for (const id of b.type === "prompts" ? b.ids : []) {
+      const p = prompts[id];
+      if (p && p.type === "listChoice" && listBlocks[p.list]) need(partOfSection(s.id) === partOfSection(sectionOfList[p.list]), `prompt ${id}: must be in the same part as options block "${p.list}"`);
+    }
+  }
+}
+const fileStep = source.caseFile && source.caseFile.step;
+need(fileStep === undefined || (Number.isInteger(fileStep) && fileStep >= 1 && fileStep <= (source.worksheet || []).length + 1), "caseFile.step must be a whole number from 1 to one more than the number of worksheet sections");
 if (errors.length) fail(`case file has problems:\n  ${errors.join("\n  ")}`);
 
 // ---------- Number the case-file items ----------
@@ -154,6 +211,7 @@ function assemble(part, partIndex) {
   const fileItems = itemOrder.filter((id) => !part || releasedIn[id] <= partIndex);
   const usedPrompts = new Set();
   let usesPerspectives = false;
+  const usedOptionSetNames = new Set();
   const report = part ? part.report : source.report;
 
   for (const s of sections) {
@@ -162,18 +220,24 @@ function assemble(part, partIndex) {
       if (b.type === "trajectory") b.steps.forEach((st) => st.ids.forEach((id) => usedPrompts.add(id)));
       if (b.type === "perspectives") {
         usesPerspectives = true;
-        usedPrompts.add(b.prompt);
+        usedPrompts.add(b.after || b.prompt);
+        if (b.options) usedOptionSetNames.add(b.options);
       }
       if (b.type === "items") for (const id of b.ids) if (!fileItems.includes(id)) fail(`section ${s.id} points to item "${id}", which is not released until a later part`);
     }
   }
   for (const id of fileItems) if (prompts[`notes.${id}`]) usedPrompts.add(`notes.${id}`);
-  for (const sec of report.sections) sec.ids.forEach((id) => usedPrompts.add(id));
+  for (const sec of report.sections) (sec.ids || []).forEach((id) => usedPrompts.add(id));
+  for (const id of Object.keys(Object.fromEntries(report.sections.flatMap((sec) => sec.lists || []).map((x) => [x, 1])))) {
+    if (part && partOfSection(sectionOfList[id]) > partIndex) fail(`${part.label} report lists options block "${id}", which belongs to a later part`);
+  }
   for (const id of ["team.name", "team.members"]) usedPrompts.add(id);
   for (const id of [...usedPrompts]) if (prompts[id].requiredIf) usedPrompts.add(prompts[id].requiredIf.prompt);
 
   const pick = (obj, ids) => Object.fromEntries([...ids].filter((id) => obj[id]).map((id) => [id, obj[id]]));
-  const usedOptionSets = new Set([...usedPrompts].map((id) => prompts[id].options).filter(Boolean));
+  const usedOptionSets = new Set([...[...usedPrompts].map((id) => prompts[id].options).filter(Boolean), ...usedOptionSetNames]);
+  // Option lists named in the report, so a later part can print an earlier part's list.
+  const reportLists = Object.fromEntries(report.sections.flatMap((sec) => sec.lists || []).map((id) => [id, listBlocks[id]]));
 
   const data = stripNotes({
     schemaVersion: source.schemaVersion,
@@ -186,9 +250,12 @@ function assemble(part, partIndex) {
     part: part
       ? { id: part.id, label: part.label, order: partIndex, last: partIndex === partsList.length - 1, end: part.end || null }
       : null,
+    // Step numbers skip the case file's step when it has one.
     outline: source.worksheet.map((s, i) => {
       const owner = partsList.findIndex((p) => p.worksheet.includes(s.id));
-      return { id: s.id, number: i + 1, title: s.title, partLabel: owner >= 0 ? partsList[owner].label : null, partOrder: owner };
+      // A section can repeat an earlier step's number with "step", for example a follow-up.
+      const number = s.step || (fileStep && i + 1 >= fileStep ? i + 2 : i + 1);
+      return { id: s.id, number, title: s.title, partLabel: owner >= 0 ? partsList[owner].label : null, partOrder: owner };
     }),
     worksheet: sections,
     items: Object.fromEntries(fileItems.map((id) => [id, { ...items[id], number: numberOf[id], isNew: !!part && partIndex > 0 && releasedIn[id] === partIndex }])),
@@ -196,6 +263,7 @@ function assemble(part, partIndex) {
     prompts: pick(prompts, usedPrompts),
     optionSets: pick(optionSets, usedOptionSets),
     perspectives: usesPerspectives ? source.perspectives || {} : {},
+    lists: reportLists,
     report,
   });
 

@@ -115,6 +115,7 @@ if (old.parts && old.parts.length) {
 }
 if ([old.start, ...(old.parts || []).map((p) => p.start)].some((st) => st && st.startLabel)) review.push('Check "startLabel" on the opening screen: the first action now opens the case file.');
 review.push("Add medical background items (kind: \"background\") for the conditions in the case, and have a clinician check them.");
+review.push('Rework the worksheet around the six steps (set caseFile.step: 2, and let students list their own options). See the skeleton at the end of engine/README.md.');
 review.push('Reword any stage text that talks about a "reveal" or tells students they must finish one stage before the next.');
 
 const header = [

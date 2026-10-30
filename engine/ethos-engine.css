@@ -727,3 +727,25 @@ textarea {
     overflow: visible;
   }
 }
+
+/* Student-written options */
+.option-card {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--teal);
+  border-radius: var(--radius);
+  margin: 16px 0;
+  padding: 8px 16px 16px;
+  min-width: 0;
+}
+.option-card > legend {
+  padding: 0 8px;
+  font-weight: 700;
+  color: var(--teal);
+}
+.option-card .field {
+  margin: 16px 0 0;
+}
+.remove-option {
+  margin-top: 12px;
+  color: var(--error);
+}

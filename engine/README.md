@@ -26,12 +26,26 @@ node tools/migrate-case.mjs ~/ETHOS-private/cases/nurse-code.mjs ~/ETHOS-private
 
 The converter turns stakeholders into people in the case file, evidence cards into records, and stages into worksheet sections. It prints a list of things to review by hand, including adding medical background items.
 
+## The six-step method
+
+Cases follow the method students use to solve cases:
+
+1. Identify the moral problem
+2. Gather relevant information (the case file)
+3. Identify the available options and their likely consequences
+4. Identify and evaluate arguments for and against the options
+5. Choose a course of action and defend it
+6. Carry out the chosen action and assess its consequences
+
+Set `caseFile.step: 2` and the navigation column becomes a numbered list of steps, with the case file in second place. Write the other five steps as worksheet sections. A skeleton is at the end of this file.
+
 ## What students see
 
 A page has two areas, and students move between them freely:
 
 - **Case file.** Numbered tiles grouped into *Records and documents*, *People involved*, *Medical background*, and *Policies, codes and law*. Students open any tile in any order; nothing is required. Each tile shows whether it has been opened. People have expandable interview questions. Every item has an optional notes box, and any notes appear at the end of the report.
 - **Worksheet.** The written sections. Students can answer them in any order. The navigation column shows each section as Not started, In progress, or Complete.
+- **Their own options.** In step 3, students list the options they can see (two to start, with Add and Remove) and write the likely consequences of each. Step 4 shows each named option again for arguments for and against. In step 5 they choose from their own list. The options you wrote for the case appear only after they choose, as "Options others have considered."
 
 The **Report** page lists any missing required answers (each one links to its field), then shows a preview with Download and Print or save as PDF. Students can download an incomplete report; it says how many answers were missing.
 
@@ -56,13 +70,13 @@ A case file is an ES module (`export default { ... }`) or JSON.
 | `id`, `version`, `title` | Stable lowercase id; version string shown in reports |
 | `versionNote` | Optional banner on the opening screen (for drafts) |
 | `start` | Opening screen: `heading`, `lead`, `startLabel` (default "Open the case file"), `sections[]`. Can be set per part instead |
-| `caseFile` | Optional `{ heading, intro[] }` above the tiles, for example roundtable instructions. Can be set per part |
+| `caseFile` | Optional `{ heading, intro[], step, navLabel }`. `heading` and `intro` appear above the tiles (for example, roundtable instructions). `step` makes the case file a numbered step; `navLabel` is its name in the navigation column. Can be set per part |
 | `items` | The case file: `{ id: item }`. See below |
-| `worksheet` | Written sections: `[{ id, title, introduction[], blocks[] }]` |
-| `prompts` | `{ id: { type: textarea\|text\|choice, label, shortLabel, help, required, requiredIf: { prompt, equals }, options, restateLabel, rows } }`. `team.name` and `team.members` are added if missing |
+| `worksheet` | Written sections: `[{ id, title, introduction[], blocks[], step }]`. Sections are numbered in order; `step` repeats an earlier number, for a follow-up such as "6 Assess the consequences" in a later part. Use it only on the last sections |
+| `prompts` | `{ id: { type: textarea\|text\|choice\|listChoice, label, shortLabel, help, required, requiredIf: { prompt, equals }, options, restateLabel, rows } }`. `team.name` and `team.members` are added if missing |
 | `optionSets` | `{ name: [{ id, title, description }] }` |
 | `perspectives` | `{ optionId: { addresses[], leavesOpen[] } }`, shown in a `perspectives` block |
-| `report` | For a single-file case: `{ title, heading, intro[], filename, downloadLabel, sections[{ title, ids[], earlier? }] }` |
+| `report` | For a single-file case: `{ title, heading, intro[], filename, downloadLabel, sections[{ title, ids[], lists[], earlier? }] }`. `lists` names `options` blocks; each named option appears with everything written for it |
 | `parts[]` | Optional. `{ id, label, file, items[], worksheet[], start, caseFile, end, report }`. Each item and each worksheet section belongs to exactly one part. `end` (`heading`, `paragraphs`, `reportHeading`, `reportIntro`, `downloadLabel`) heads the record page of a non-final part |
 
 ### Items
@@ -105,10 +119,62 @@ dementia: {
 
 ### Worksheet blocks
 
-`text`, `callout`, `list`, `quote`, `record` (label/value rows), `items` (tiles linking to case-file items, for example "New in the case file"), `concepts` (expandable explanations), `prompts`, `carryForward` (earlier-part answers, with a restate field if missing), `trajectory` (earlier answers side by side), `perspectives`.
+`text`, `callout`, `list`, `quote`, `record` (label/value rows), `items` (tiles linking to case-file items, for example "New in the case file"), `concepts` (expandable explanations), `prompts`, `carryForward` (earlier-part answers, with a restate field if missing), `trajectory` (earlier answers side by side), and:
+
+| Block | Contents |
+| --- | --- |
+| `options` | Students list their own options. `{ id, heading, intro[], fields[{ key, label, help }], min (default 2), max (default 6), required, addLabel, reportLabel }`. Each option has a name plus these fields |
+| `optionFields` | More fields for each named option from an `options` block, in a later step. `{ list, heading, intro[], fields[{ key, label }], required }` |
+| `perspectives` | Either `{ heading, intro[], prompt }` for a `choice` prompt (shows the chosen option and the rest), or `{ heading, intro[], after, options }` to show an option set only once the prompt named by `after` is answered |
+
+A `listChoice` prompt (`{ type: "listChoice", list: "<options block id>" }`) offers the student's own named options as radio buttons. An `options` block, its `optionFields`, and any `listChoice` from it must be in the same part, and a `listChoice` can't be carried forward. Carry forward the written defense instead. So split a case into parts before step 3 or after step 5, not in between.
 
 Use stable prompt ids. Answers are saved by id, so renaming a label is safe but reusing an id for a different question attaches old answers to it.
 
 ### New information
 
 A later part adds items to the case file. It doesn't have to change anyone's mind: most of the time it's simply more to weigh, such as a new person to hear from, a document, or a changed constraint. Write the prompt so that keeping a view is as acceptable as changing it, for example: "Does the new information change your recommendation, or how you would carry it out? It's fine if it doesn't. Explain why."
+
+## Skeleton for the six-step method
+
+```js
+export default {
+  schemaVersion: 2,
+  id: "my-case",
+  version: "0.1-draft",
+  title: "My Case",
+  caseFile: { step: 2, navLabel: "Gather relevant information", heading: "Gather relevant information" },
+  items: { /* records, people, medical background, policies */ },
+  worksheet: [
+    { id: "problem", title: "Identify the moral problem", blocks: [{ type: "prompts", ids: ["problem", "initial-view"] }] },
+    {
+      id: "options",
+      title: "Identify the options and their likely consequences",
+      blocks: [{ type: "options", id: "opts", intro: ["List every option you can see, including ones you'd reject."], fields: [{ key: "consequences", label: "Likely consequences" }] }],
+    },
+    {
+      id: "arguments",
+      title: "Evaluate arguments for and against",
+      blocks: [{ type: "optionFields", list: "opts", fields: [{ key: "for", label: "Arguments for" }, { key: "against", label: "Arguments against" }] }],
+    },
+    {
+      id: "choose",
+      title: "Choose a course of action and defend it",
+      blocks: [
+        { type: "prompts", ids: ["choice", "defense", "objection"] },
+        { type: "perspectives", heading: "Options others have considered", after: "choice", options: "case-options" },
+      ],
+    },
+    { id: "act", title: "Carry out the chosen action", blocks: [{ type: "prompts", ids: ["plan", "watch-for"] }] },
+  ],
+  prompts: {
+    choice: { type: "listChoice", list: "opts", label: "Which of your options do you choose?", shortLabel: "Chosen option", required: true },
+    plan: { type: "textarea", label: "Who does what first, and what could go wrong?", shortLabel: "Action plan", required: true },
+    "watch-for": { type: "textarea", label: "How will you know whether it worked, and what would make you revisit the decision?", shortLabel: "What to watch for", required: true },
+    /* problem, initial-view, defense, objection ... */
+  },
+  report: { title: "Consultation report", filename: "my-case-report.html", sections: [{ title: "Options", lists: ["opts"] } /* ... */] },
+};
+```
+
+For a follow-up, add a later part whose case file holds a record of what happened ("Six weeks later") and a worksheet section with `step: 6` titled "Assess the consequences". It carries the action plan forward and asks how things went, judged against the plan.
